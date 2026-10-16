@@ -39,7 +39,7 @@ def write(repo: Path, rel: str, content: str | bytes) -> None:
     if isinstance(content, bytes):
         path.write_bytes(content)
     else:
-        path.write_text(content, encoding="utf-8")
+        path.write_bytes(content.encode("utf-8"))
 
 
 def commit(repo: Path, index: int, message: str, tag: str) -> str:
