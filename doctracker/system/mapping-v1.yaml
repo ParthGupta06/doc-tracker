@@ -1,0 +1,67 @@
+# Pod-shared classification and mapping configuration (Teams 15/16).
+# Rules are evaluated top to bottom; the first matching pattern decides the
+# category (classification precedence). Patterns are POSIX globs where
+# "**" matches any number of directories and "*" stays within one segment.
+config_version: mapping-v1
+
+categories:
+  - category: REQUIREMENT
+    patterns:
+      - "requirements/**"
+      - "docs/requirements/**"
+      - "**/REQUIREMENTS*.md"
+  - category: SPECIFICATION
+    patterns:
+      - "spec/**"
+      - "specs/**"
+      - "docs/spec/**"
+      - "docs/specs/**"
+      - "**/openapi*.yaml"
+      - "**/openapi*.yml"
+      - "**/openapi*.json"
+  - category: ARCHITECTURE
+    patterns:
+      - "docs/architecture/**"
+      - "**/ARCHITECTURE*.md"
+      - "**/model_config.*"
+  - category: DESIGN
+    patterns:
+      - "docs/design/**"
+      - "docs/adr/**"
+      - "**/DESIGN*.md"
+  - category: IMPLEMENTATION
+    patterns:
+      - "**/*.py"
+      - "**/*.ipynb"
+      - "**/*.js"
+      - "**/*.ts"
+      - "**/*.java"
+      - "**/*.c"
+      - "**/*.h"
+      - "**/*.cpp"
+      - "**/*.hpp"
+      - "**/*.go"
+      - "**/*.rs"
+      - "**/*.rb"
+      - "**/*.sh"
+      - "**/*.sql"
+default_category: OTHER
+
+# Files with these extensions (or exact names) are text the detector can read.
+# Any other changed file is still reported in `changes` but is listed in
+# `skipped` with reason UNSUPPORTED_FILE_TYPE.
+supported_extensions: [".py", ".ipynb", ".js", ".ts", ".java", ".c", ".h", ".cpp", ".hpp",
+  ".go", ".rs", ".rb", ".sh", ".sql", ".md", ".rst", ".txt", ".yaml", ".yml", ".json",
+  ".toml", ".cfg", ".ini", ".csv"]
+supported_filenames: ["LICENSE", "Makefile", "Dockerfile", "README", "CODEOWNERS"]
+
+# Code-to-documentation mappings are consumed by the Phase 4 detector.
+mappings:
+  - source: "src/model.py"
+    documentation: "docs/model.md"
+  - source: "src/train.py"
+    documentation: "docs/training.md"
+  - source: "src/tokenizer.py"
+    documentation: "docs/tokenizer.md"
+
+max_changed_files: 2000

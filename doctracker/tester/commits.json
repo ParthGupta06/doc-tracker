@@ -1,0 +1,14 @@
+{
+  "fixture_version": "fixtures-v1",
+  "commits": {
+    "c0-initial": "d19092e138ea3f9788a8eac76005ee53d22940da",
+    "c1-impl-only": "add930c827b4f242d173fe6d26ebc068c8dd65fb",
+    "c2-add-mod-del": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
+    "c3-rename": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
+    "c4-categories": "55e4b15ba4ce0a9e0923bffe1335c013b7c6ae07",
+    "c5-docs-only": "807e7bbc587d8a04731a850546e6acdb175a4392",
+    "c6-binary": "8adab1b196fab4a522459716d96f2942665b222c",
+    "c7-code-and-doc": "cb9fd8c094a53c99aec7203c12bc396f0b9bfac6",
+    "c8-missing-doc": "912b0b88a52b14c5be2accffb5c2aff92c2f59e5"
+  }
+}

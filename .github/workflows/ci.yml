@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "System base URL to test (defaults to our deployment)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  static-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Type check (mypy --strict)
+        run: mypy doctracker
+      - name: Dependency vulnerability scan (pip-audit)
+        run: pip-audit -r requirements.txt
+      - name: OpenAPI contract drift check
+        run: PYTHONPATH=. python scripts/export_openapi.py --check
+      - name: Unit, API and in-process suite tests
+        run: |
+          git config --global user.email ci@example.invalid
+          git config --global user.name ci
+          coverage run --source=doctracker -m pytest -v
+          coverage report
+
+  deployed-suite:
+    needs: static-and-unit
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      BASE: ${{ vars.DEPLOY_BASE_URL }}
+      FIXTURE_REPO: ${{ vars.FIXTURE_REPO }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install httpx
+      - name: Trigger Render deploy of this tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$HOOK" ]; then curl -fsS -X POST "$HOOK&ref=${GITHUB_SHA}"; sleep 240; fi
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS "$BASE/system/health" && exit 0; sleep 10
+          done; exit 1
+      - name: Contract status table
+        run: python scripts/contract_status.py "${{ github.event.inputs.target_url || format('{0}/system', vars.DEPLOY_BASE_URL) }}"
+      - name: Full suite through the testing interface
+        run: |
+          python scripts/run_suite.py --tester "$BASE/tester" \
+            --target "${{ github.event.inputs.target_url || format('{0}/system', vars.DEPLOY_BASE_URL) }}" \
+            --out suite-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: suite-report
+          path: suite-report.json

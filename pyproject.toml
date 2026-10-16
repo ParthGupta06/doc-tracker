@@ -1,0 +1,27 @@
+[project]
+name = "doctracker"
+version = "0.3.0"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S603", "S607", "S101", "B008", "UP040"]
+
+[tool.ruff.lint.per-file-ignores]
+"fixtures/*.py" = ["S", "E501"]
+"tests/*" = ["S"]
+"fixtures/*" = ["S"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+exclude = ["tests/", "fixtures/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

@@ -1,0 +1,6 @@
+-r requirements.txt
+pytest==9.1.1
+ruff
+mypy
+types-PyYAML
+pip-audit

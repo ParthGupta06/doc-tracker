@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: doc-tracker-team16
+    runtime: docker
+    plan: free
+    region: ohio
+    healthCheckPath: /system/health
+    autoDeploy: false
+    envVars:
+      - key: FIXTURE_REPO
+        sync: false
+      - key: EVIDENCE_REPO
+        sync: false
+      - key: EVIDENCE_TOKEN
+        sync: false
