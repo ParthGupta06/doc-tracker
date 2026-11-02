@@ -4,10 +4,36 @@ ECE 30861 / CSCI 46500, Fall 2026. Read-only service that analyzes changes betwe
 
 | Service | Base URL (register these) |
 |---|---|
-| System | `https://<render-host>/system` |
-| Tester | `https://<render-host>/tester` |
+| System | `https://doc-tracker-team16.onrender.com/system` |
+| Tester | `https://doc-tracker-team16.onrender.com/tester` |
 
 Interactive API docs: `/system/docs`, `/tester/docs`. Machine-readable contracts: [`openapi/`](openapi/).
+
+## Web workspace
+
+Open [the homepage](https://doc-tracker-team16.onrender.com/) to analyze a public
+repository, retrieve an analysis by ID, or run the tester against a compatible
+system base URL. The page reads live health/version information, shows findings
+and individual test outcomes, and downloads original JSON evidence. It also shows
+code, component and system-model coverage returned by the tester. These are
+observations from a run, not a declaration of complete contract conformance.
+
+Use the sample-repository button for a deterministic public example, or supply
+`owner/repository` and a head commit SHA (optionally a base SHA). A test target is
+the exact system API base URL supplied by its team, including `/system` when used;
+do not append `/docs`. Keep the page open during a suite run, save the session ID,
+and download the resulting report. A session ID can recover a report after a
+connection interruption while the service instance still exists.
+
+Opening `/system` or `/tester` now redirects to the relevant interactive API docs;
+the operation paths underneath those base URLs remain the same. `/info` provides
+the machine-readable service links and version previously returned at `/`.
+
+The free Render service may take about a minute to wake after inactivity. The
+current deployment uses local evidence storage: analyses and in-memory tester
+sessions can disappear on sleep, restart or redeployment. Download evidence before
+leaving. Authorized review mutations and model-drift validation are not part of
+this prose detector; all findings require human review.
 
 ## Quick start
 
