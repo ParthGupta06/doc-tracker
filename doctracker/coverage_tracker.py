@@ -1,22 +1,31 @@
-"""Per-session line coverage of the system package (testing interface: GET /test/report).
-
-coverage.py measures doctracker.system for the whole process. Each
-POST /test/setup switches the dynamic context to the new session ID, so lines
-executed by later project requests are attributed to that session. Only one
-session is the measurement target at a time: a newer setup closes the
-previous session's window, whose report stays readable but no longer grows.
-"""
-
+"""Request-scoped line coverage: a worker retains its session through cancellation/rollover."""
 from __future__ import annotations
 
-import os
 import threading
+from collections.abc import Callable
+from pathlib import Path
+from types import FrameType
 from typing import Any
 
 import coverage
 
-MEASURED_PACKAGE = "doctracker.system"
-MEASURED_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system") + os.sep
+MEASURED_DIR = Path(__file__).resolve().parent / 'system'
+
+
+class RequestContext(coverage.CoveragePlugin):
+    def dynamic_context(self, frame: FrameType) -> str | None:
+        if frame.f_code is call.__code__:
+            return str(frame.f_locals['session_id']) or 'unassigned'
+        return None
+
+
+def register(plugins: Any) -> None:
+    plugins.add_dynamic_context(RequestContext())
+
+
+def call[**P, T](session_id: str, fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+    """Coverage's dynamic context covers this frame and descendants in this thread."""
+    return fn(*args, **kwargs)
 
 
 class SessionCoverage:
@@ -25,38 +34,37 @@ class SessionCoverage:
         self.cov: coverage.Coverage | None = None
         self.error: str | None = None
         try:
-            existing = coverage.Coverage.current()
-            if existing is not None:
-                self.cov = existing
+            if coverage.Coverage.current() is not None:
+                # Do not corrupt an enclosing CI coverage collection or attribute its global context to sessions.
+                self.error = 'external coverage collector active; session-specific measurement unavailable'
             else:
-                self.cov = coverage.Coverage(source_pkgs=[MEASURED_PACKAGE], data_file=None, branch=False)
+                self.cov = coverage.Coverage(source_pkgs=['doctracker.system'], data_file=None, plugins=[register])
+                self.cov.set_option('run:core', 'ctrace')
                 self.cov.start()
-        except Exception as exc:  # pragma: no cover - environment specific
+        except Exception as exc:  # pragma: no cover - platform-specific
             self.cov = None
-            self.error = f"{type(exc).__name__}: {exc}"
+            self.error = type(exc).__name__
 
     def begin(self, session_id: str) -> None:
-        if self.cov is not None:
-            with self.lock:
-                self.cov.switch_context(session_id)
+        # Context is captured by each request, never switched globally at setup.
+        pass
 
     def report(self, session_id: str) -> dict[str, Any]:
         if self.cov is None:
-            return {"covered": None, "total": None,
-                    "basis": f"Source lines; target instrumentation unavailable ({self.error})"}
+            return {'covered': None, 'total': None, 'basis': 'Source lines unavailable: ' + str(self.error)}
         with self.lock:
             data = self.cov.get_data()
-            covered = 0
-            total = 0
-            for filename in sorted(f for f in data.measured_files() if os.path.abspath(f).startswith(MEASURED_DIR)):
-                _, statements, _, _, _ = self.cov.analysis2(filename)
-                stmt_set = set(statements)
-                total += len(stmt_set)
-                by_line = data.contexts_by_lineno(filename)
-                covered += sum(1 for line, ctxs in by_line.items() if line in stmt_set and session_id in ctxs)
-        return {"covered": covered, "total": total,
-                "basis": ("Executable source lines of the doctracker.system package executed while handling "
-                          "this session's requests since setup (coverage.py, line coverage)")}
+            covered = total = 0
+            for filename in sorted(MEASURED_DIR.glob('*.py')):
+                path = str(filename)
+                _, statements, _, _, _ = self.cov.analysis2(path)
+                statement_set = set(statements)
+                total += len(statement_set)
+                covered += sum(1 for line, contexts in data.contexts_by_lineno(path).items()
+                               if line in statement_set and session_id in contexts)
+        return {'covered': covered, 'total': total,
+                'basis': 'Executable doctracker.system lines in request-scoped coverage.py contexts; '
+                         'each request retains the session captured at entry'}
 
 
 tracker: SessionCoverage | None = None

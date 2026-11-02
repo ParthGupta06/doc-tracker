@@ -6,6 +6,7 @@ scheduled for later phases are reported as `skip` with the reason.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -13,6 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from jsonschema import ValidationError
+
+from doctracker.tester.contract import ROOT, validate
 
 COMMITS: dict[str, str] = json.loads(Path(__file__).with_name("commits.json").read_text())["commits"]
 
@@ -27,11 +31,8 @@ COMPONENTS = {
 }
 ACCEPTANCE_CRITERIA = [f"AC-{i:02d}" for i in range(1, 11)]
 
-SIGNIFICANT = ("repository", "head_commit", "base_commit", "status", "changes", "skipped")
-RESULT_FIELDS = {
-    "analysis_id": str, "repository": str, "head_commit": str, "config_version": str,
-    "tool_version": str, "status": str, "issues": list, "changes": list, "skipped": list,
-}
+SIGNIFICANT = ("head_commit", "base_commit", "config_version", "status", "error", "changes", "skipped", "unmapped")
+GOLDEN = {c['case']: c for c in json.loads((ROOT / 'docs/contract/golden-outputs.json').read_text())['cases']}
 
 
 class Fail(Exception):
@@ -48,15 +49,23 @@ class Ctx:
     target: str
     fixture_repo: str
     memo: dict[str, Any] = field(default_factory=dict)
+    answered: bool = False
 
     async def post(self, path: str, body: Any = None, raw: str | None = None) -> httpx.Response:
         if raw is not None:
-            return await self.client.post(self.target + path, content=raw,
-                                          headers={"Content-Type": "application/json"})
-        return await self.client.post(self.target + path, json=body)
+            response = await asyncio.wait_for(self.client.post(self.target + path, content=raw,
+                                              headers={"Content-Type": "application/json"}), 90.0)
+        else:
+            response = await asyncio.wait_for(self.client.post(self.target + path, json=body), 90.0)
+        self.answered = True
+        return response
 
     async def get(self, path: str) -> httpx.Response:
-        return await self.client.get(self.target + path)
+        response = await asyncio.wait_for(self.client.get(self.target + path), 90.0)
+        self.answered = True
+        if response.status_code >= 500:
+            raise SystemError_(f'GET {path} returned HTTP {response.status_code}')
+        return response
 
 
 def body_of(resp: httpx.Response) -> Any:
@@ -67,24 +76,30 @@ def body_of(resp: httpx.Response) -> Any:
 
 
 def check_schema(result: Any) -> None:
-    if not isinstance(result, dict):
-        raise Fail("AnalysisResult is not a JSON object")
-    for name, kind in RESULT_FIELDS.items():
-        if not isinstance(result.get(name), kind):
-            raise Fail(f"AnalysisResult.{name} missing or not {kind.__name__}")
-    if result["status"] not in ("SUCCESS", "ERROR"):
-        raise Fail(f"status {result['status']!r} is not SUCCESS or ERROR")
-    for change in result["changes"]:
-        for key in ("path", "change_type", "category"):
-            if not isinstance(change.get(key), str):
-                raise Fail(f"change entry missing string field {key}")
-    for issue in result["issues"]:
-        if issue.get("verification_status") != "PENDING_REVIEW":
-            raise Fail("a new finding is not PENDING_REVIEW")
+    try:
+        validate(result, 'AnalysisResult')
+    except ValidationError as exc:
+        raise Fail(f"pod AnalysisResult schema: {exc.message}") from exc
 
 
-def normalized_changes(result: dict[str, Any]) -> list[tuple[str, str | None, str, str]]:
-    return sorted((c["path"], c.get("old_path"), c["change_type"], c["category"]) for c in result["changes"])
+def without_explanations(issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{k: v for k, v in f.items() if k != 'explanation'} for f in issues]
+
+
+def compare_golden(result: dict[str, Any], case: str, findings: bool = False) -> None:
+    expected = GOLDEN[case]['expected']
+    for key in SIGNIFICANT:
+        if result[key] != expected[key]:
+            raise Fail(f"{case}: {key} differs from pinned golden output")
+    if findings and without_explanations(result['issues']) != without_explanations(expected['issues']):
+        raise Fail(f"{case}: findings differ from pinned golden output")
+
+
+async def golden_case(ctx: Ctx, case: str, findings: bool = False) -> dict[str, Any]:
+    request = GOLDEN[case]['request']
+    r = await analyze_ok(ctx, request['commit_id'], request.get('base_commit'))
+    compare_golden(r, case, findings)
+    return r
 
 
 async def analyze_ok(ctx: Ctx, commit: str, base: str | None = None) -> dict[str, Any]:
@@ -103,13 +118,6 @@ async def analyze_ok(ctx: Ctx, commit: str, base: str | None = None) -> dict[str
     return result
 
 
-def expect_changes(result: dict[str, Any], expected: list[tuple[str, str | None, str, str]]) -> str:
-    actual = normalized_changes(result)
-    if actual != sorted(expected):
-        raise Fail(f"changes differ. Expected {sorted(expected)}; received {actual}")
-    return f"Expected {len(expected)} classified change(s); received matching set."
-
-
 async def expect_error(ctx: Ctx, resp: httpx.Response, status: int, code: str) -> str:
     if resp.status_code >= 500 and status < 500:
         raise SystemError_(f"expected HTTP {status} {code}; system failed with HTTP {resp.status_code}")
@@ -124,69 +132,38 @@ async def expect_error(ctx: Ctx, resp: httpx.Response, status: int, code: str) -
 # ---------------------------------------------------------------- tests
 
 async def t01(ctx: Ctx) -> str:
-    r = await analyze_ok(ctx, COMMITS["c1-impl-only"])
-    ctx.memo["t01"] = r
-    if r["base_commit"] != COMMITS["c0-initial"]:
-        raise Fail(f"default base should be first parent {COMMITS['c0-initial']}; received {r['base_commit']}")
-    return expect_changes(r, [("src/model.py", None, "MODIFIED", "IMPLEMENTATION")])
+    ctx.memo['t01'] = await golden_case(ctx, 'c1-impl-only')
+    return 'Shared fields match golden output.'
 
 
 async def t02(ctx: Ctx) -> str:
-    r = await analyze_ok(ctx, COMMITS["c2-add-mod-del"])
-    return expect_changes(r, [
-        ("docs/model.md", None, "MODIFIED", "OTHER"),
-        ("src/eval.py", None, "ADDED", "IMPLEMENTATION"),
-        ("src/train.py", None, "DELETED", "IMPLEMENTATION"),
-    ])
+    await golden_case(ctx, 'c2-add-mod-del')
+    return 'Shared fields match golden output.'
 
 
 async def t03(ctx: Ctx) -> str:
-    r = await analyze_ok(ctx, COMMITS["c3-rename"])
-    return expect_changes(r, [("src/evaluate.py", "src/eval.py", "RENAMED", "IMPLEMENTATION")])
+    await golden_case(ctx, 'c3-rename')
+    return 'Rename fields match golden output.'
 
 
 async def t04(ctx: Ctx) -> str:
-    r = await analyze_ok(ctx, COMMITS["c4-categories"])
-    return expect_changes(r, [
-        ("docs/architecture/overview.md", None, "MODIFIED", "ARCHITECTURE"),
-        ("docs/design/decisions.md", None, "MODIFIED", "DESIGN"),
-        ("requirements/REQUIREMENTS.md", None, "MODIFIED", "REQUIREMENT"),
-        ("specs/api.yaml", None, "MODIFIED", "SPECIFICATION"),
-    ])
+    await golden_case(ctx, 'c4-categories')
+    return 'Categories match golden output.'
 
 
 async def t05(ctx: Ctx) -> str:
-    r = await analyze_ok(ctx, COMMITS["c6-binary"])
-    msg = expect_changes(r, [
-        ("assets/logo.png", None, "MODIFIED", "OTHER"),
-        ("data/weights.bin", None, "ADDED", "OTHER"),
-    ])
-    skipped = sorted((s.get("path"), s.get("reason")) for s in r["skipped"])
-    expected = [("assets/logo.png", "UNSUPPORTED_FILE_TYPE"), ("data/weights.bin", "UNSUPPORTED_FILE_TYPE")]
-    if skipped != expected:
-        raise Fail(f"skipped differs. Expected {expected}; received {skipped}")
-    return msg + " Both binary files listed as skipped."
+    await golden_case(ctx, 'c6-binary')
+    return 'Unsupported paths match golden output.'
 
 
 async def t06(ctx: Ctx) -> str:
-    r = await analyze_ok(ctx, COMMITS["c3-rename"], base=COMMITS["c0-initial"])
-    if r["base_commit"] != COMMITS["c0-initial"]:
-        raise Fail("explicit base_commit was not honored")
-    return expect_changes(r, [
-        ("docs/model.md", None, "MODIFIED", "OTHER"),
-        ("src/evaluate.py", None, "ADDED", "IMPLEMENTATION"),
-        ("src/model.py", None, "MODIFIED", "IMPLEMENTATION"),
-        ("src/train.py", None, "DELETED", "IMPLEMENTATION"),
-    ])
+    await golden_case(ctx, 'c0-to-c3-explicit-base')
+    return 'Explicit base and all shared fields match golden output.'
 
 
 async def t07(ctx: Ctx) -> str:
-    r = await analyze_ok(ctx, COMMITS["c0-initial"])
-    if r["base_commit"] is not None:
-        raise Fail(f"root commit should have base_commit null; received {r['base_commit']}")
-    if len(r["changes"]) != 11 or any(c["change_type"] != "ADDED" for c in r["changes"]):
-        raise Fail("root commit should report all 11 files as ADDED")
-    return "Root commit analyzed against the empty tree; 11 ADDED changes and base_commit null."
+    await golden_case(ctx, 'c0-initial')
+    return 'Root result matches golden output.'
 
 
 async def t08(ctx: Ctx) -> str:
@@ -249,15 +226,35 @@ async def t16(ctx: Ctx) -> str:
 
 
 async def t17(ctx: Ctx) -> str:
-    runs = [await analyze_ok(ctx, COMMITS["c4-categories"]) for _ in range(5)]
-    reference = {k: runs[0][k] for k in SIGNIFICANT}
-    for i, run in enumerate(runs[1:], start=2):
-        if {k: run[k] for k in SIGNIFICANT} != reference:
-            raise Fail(f"run {i} differs from run 1 in significant fields")
-        if [{k: v for k, v in f.items() if k != "finding_id"} for f in run["issues"]] != \
-           [{k: v for k, v in f.items() if k != "finding_id"} for f in runs[0]["issues"]]:
-            raise Fail(f"run {i} findings differ from run 1")
-    return "Five repeated runs returned identical significant fields and schema-valid results."
+    for case in ('c4-categories', 'c1-impl-only'):
+        runs = [await golden_case(ctx, case) for _ in range(5)]
+        reference = {k: runs[0][k] for k in SIGNIFICANT}
+        if any({k: r[k] for k in SIGNIFICANT} != reference for r in runs):
+            raise Fail(f'{case}: significant shared fields differ across five runs')
+    return 'Five runs each of c4 and c1 match the golden shared fields.'
+
+
+async def t18(ctx: Ctx) -> str:
+    ctx.memo['t18'] = await golden_case(ctx, 'c8-missing-doc', findings=True)
+    return 'Missing-document findings match golden output including stable IDs.'
+
+
+async def t19(ctx: Ctx) -> str:
+    ctx.memo['t19'] = await golden_case(ctx, 'c1-impl-only', findings=True)
+    return 'Outdated-document and undocumented-symbol findings match golden output.'
+
+
+async def t20(ctx: Ctx) -> str:
+    await golden_case(ctx, 'c7-code-and-doc', findings=True)
+    return 'Correct co-update produces no findings.'
+
+
+async def t21(ctx: Ctx) -> str:
+    for case in ('c8-missing-doc', 'c1-impl-only'):
+        r = await golden_case(ctx, case, findings=True)
+        if not r['issues'] or any(f['verification_status'] != 'PENDING_REVIEW' for f in r['issues']):
+            raise Fail('expected nonempty pending findings')
+    return 'Both missing and stale cases produce only pending findings.'
 
 
 TestFn = Callable[[Ctx], Awaitable[str]]
@@ -271,6 +268,7 @@ class TestCase:
     components: tuple[str, ...]
     fn: TestFn | None
     skip_reason: str | None = None
+    feature: str | None = None
 
 
 PIPELINE = ("C1", "C2", "C3", "C5")
@@ -293,16 +291,18 @@ TESTS: list[TestCase] = [
     TestCase("T-15", "Unknown analysis_id", ("AC-06", "AC-08"), ("C1", "C6"), t15),
     TestCase("T-16", "Distinct, durable run files", ("AC-06",), PIPELINE + ("C6",), t16),
     TestCase("T-17", "Five-run repeatability", ("AC-10",), PIPELINE, t17),
-    TestCase("T-18", "Missing mapped documentation finding", ("AC-02",), ("C4",), None,
-             "Documentation detection is the Phase 4 milestone (Phase 2, Section 6.2)."),
-    TestCase("T-19", "Unchanged mapped documentation finding", ("AC-02",), ("C4",), None,
-             "Documentation detection is the Phase 4 milestone (Phase 2, Section 6.2)."),
-    TestCase("T-20", "Code and documentation updated together", ("AC-03",), ("C4",), None,
-             "Documentation detection is the Phase 4 milestone (Phase 2, Section 6.2)."),
-    TestCase("T-21", "New findings start PENDING_REVIEW", ("AC-04",), ("C4", "C5"), None,
-             "Requires findings from the Phase 4 detector."),
-    TestCase("T-22", "Authorized and unauthorized review decisions", ("AC-05",), ("C7",), None,
-             "Review workflow is the Phase 5 milestone (Phase 2, Section 6.3)."),
-    TestCase("T-23", "Read-only analysis, no repository code execution", ("AC-09",), ("C2",), None,
-             "Requires source comparison and code inspection; scheduled for Phase 5."),
+    TestCase("T-18", "Missing mapped documentation finding", ("AC-02",), ("C4",), t18, feature="prose_detector"),
+    TestCase("T-19", "Unchanged mapped documentation finding", ("AC-02",), ("C4",), t19, feature="prose_detector"),
+    TestCase("T-20", "Code and documentation updated together", ("AC-03",), ("C4",), t20, feature="prose_detector"),
+    TestCase("T-21", "New findings start PENDING_REVIEW", ("AC-04",), ("C4", "C5"), t21, feature="prose_detector"),
+    TestCase("T-22", "Authorized and unauthorized review decisions", ("AC-05",), ("C7",), None, "Phase 5"),
+    TestCase("T-23", "Read-only analysis, no repository code execution", ("AC-09",), ("C2",), None, "checked by inspection"),
 ]
+
+# v2.4.0 publishes no model fixture/oracles. Never invent results or test requests.
+for number in range(24, 34):
+    TESTS.append(TestCase(f"T-{number}", "Model drift (pending oracle)",
+                         ("AC-08",) if number == 32 else (("AC-10",) if number == 33 else
+                         (("AC-03",) if number in (24, 25, 29) else ("AC-02",))),
+                         ("C1", "C2", "C4") if number == 33 else ("C1", "C2", "C3", "C4", "C5"),
+                         None, "expected answers not yet published", "model_drift"))

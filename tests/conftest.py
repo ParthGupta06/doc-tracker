@@ -26,3 +26,13 @@ def pytest_sessionstart(session: pytest.Session) -> None:
         subprocess.run(["rm", "-rf", str(bare)], check=True)
     bare.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "clone", "-q", "--bare", str(work), str(bare)], check=True)
+
+
+@pytest.fixture(autouse=True)
+def isolate_sessions():
+    from doctracker.system import app as system
+    from doctracker.tester import app as tester
+    system.sessions.clear()
+    system.active_session = None
+    tester.sessions.clear()
+    yield

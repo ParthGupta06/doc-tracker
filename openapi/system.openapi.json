@@ -111,6 +111,13 @@
           "tool_version": {
             "title": "Tool Version",
             "type": "string"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
           }
         },
         "required": [
@@ -125,6 +132,7 @@
           "issues",
           "changes",
           "skipped",
+          "unmapped",
           "created_at"
         ],
         "title": "AnalysisResult",
@@ -139,6 +147,7 @@
               "ARCHITECTURE",
               "SPECIFICATION",
               "REQUIREMENT",
+              "DOCUMENTATION",
               "OTHER"
             ],
             "title": "Category",
@@ -207,6 +216,7 @@
               "ARCHITECTURE",
               "SPECIFICATION",
               "REQUIREMENT",
+              "DOCUMENTATION",
               "OTHER"
             ],
             "title": "Change Category",
@@ -217,6 +227,14 @@
             "type": "string"
           },
           "documentation_file": {
+            "title": "Documentation File",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "fact": {
             "anyOf": [
               {
                 "type": "string"
@@ -225,17 +243,22 @@
                 "type": "null"
               }
             ],
-            "title": "Documentation File"
-          },
-          "explanation": {
-            "title": "Explanation",
-            "type": "string"
+            "title": "Fact"
           },
           "finding_id": {
             "title": "Finding Id",
             "type": "string"
           },
           "issue_type": {
+            "enum": [
+              "MISSING_DOCUMENTATION",
+              "OUTDATED_DOCUMENTATION",
+              "ORPHANED_DOCUMENTATION",
+              "UNDOCUMENTED_SYMBOL",
+              "STALE_SIGNATURE",
+              "STALE_VALUE",
+              "STALE_REFERENCE"
+            ],
             "title": "Issue Type",
             "type": "string"
           },
@@ -251,6 +274,7 @@
           "code_file",
           "documentation_file",
           "change_category",
+          "fact",
           "explanation",
           "verification_status"
         ],
@@ -277,6 +301,7 @@
             "type": "string"
           },
           "reason": {
+            "const": "UNSUPPORTED_FILE_TYPE",
             "title": "Reason",
             "type": "string"
           }
@@ -353,7 +378,7 @@
   "info": {
     "description": "Teams 15/16 pod project API (Phase 2, Section 5) and course testing endpoints.",
     "title": "Documentation Tracker System",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "openapi": "3.1.0",
   "paths": {

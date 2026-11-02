@@ -85,7 +85,7 @@
   "info": {
     "description": "Team 16 automated suite for the Teams 15/16 pod project API.",
     "title": "Documentation Tracker Tester",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 REPOSITORY_PATTERN = r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
 COMMIT_PATTERN = r"^[0-9a-fA-F]{7,40}$"
 
-ChangeCategory = Literal["IMPLEMENTATION", "DESIGN", "ARCHITECTURE", "SPECIFICATION", "REQUIREMENT", "OTHER"]
+ChangeCategory = Literal["IMPLEMENTATION", "DESIGN", "ARCHITECTURE", "SPECIFICATION", "REQUIREMENT", "DOCUMENTATION", "OTHER"]
 ChangeType = Literal["ADDED", "MODIFIED", "DELETED", "RENAMED", "COPIED", "TYPE_CHANGED"]
 
 
@@ -31,15 +31,17 @@ class Change(BaseModel):
 
 class Skipped(BaseModel):
     path: str
-    reason: str
+    reason: Literal["UNSUPPORTED_FILE_TYPE"]
 
 
 class Finding(BaseModel):
     finding_id: str
-    issue_type: str
+    issue_type: Literal["MISSING_DOCUMENTATION", "OUTDATED_DOCUMENTATION", "ORPHANED_DOCUMENTATION",
+                        "UNDOCUMENTED_SYMBOL", "STALE_SIGNATURE", "STALE_VALUE", "STALE_REFERENCE"]
     code_file: str
-    documentation_file: str | None
+    documentation_file: str
     change_category: ChangeCategory
+    fact: str | None
     explanation: str
     verification_status: Literal["PENDING_REVIEW"]
 
@@ -61,6 +63,7 @@ class AnalysisResult(BaseModel):
     issues: list[Finding]
     changes: list[Change]
     skipped: list[Skipped]
+    unmapped: list[str]
     created_at: str
 
 

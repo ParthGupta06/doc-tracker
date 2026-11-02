@@ -1,6 +1,6 @@
 # Documentation Tracker (Team 16, Pod 15/16)
 
-ECE 30861 / CSCI 46500, Fall 2026. Read-only service that analyzes changes between two commits of a public GitHub repository, classifies each change, and saves immutable JSON evidence, supporting technical-documentation upkeep under EU AI Act Article 53(1)(a) and Annex XI. Phase 3 increment: `v0.3.0`.
+ECE 30861 / CSCI 46500, Fall 2026. Read-only service that analyzes changes between two commits of a public GitHub repository, classifies each change, warns about missing or unchanged mapped documentation, and saves immutable JSON evidence, supporting technical-documentation upkeep under EU AI Act Article 53(1)(a) and Annex XI. Phase 4 implementation: `v0.4.0` (release/deployment verification required).
 
 | Service | Base URL (register these) |
 |---|---|
@@ -13,7 +13,7 @@ Interactive API docs: `/system/docs`, `/tester/docs`. Machine-readable contracts
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                                   # 40 tests, offline (builds the fixture repo locally)
+python -m pytest -q                       # offline unit/API/acceptance tests
 uvicorn doctracker.main:app --port 8000  # system at /system, tester at /tester
 ```
 
@@ -44,3 +44,10 @@ git push -u origin main --tags
 ```
 
 See [`docs/SYSTEM.md`](docs/SYSTEM.md) for models, interface, session rules and known limitations.
+
+## Phase 4 evidence
+
+See [system models](docs/SYSTEM.md), [mapping investigation](docs/MAPPING_INVESTIGATION.md),
+[validation](docs/VALIDATION.md) and [release steps](docs/RELEASE.md).
+The co-change heuristic cannot prove that an edited document is correct.
+Version 1 response-field corrections require clients of v0.3.0 to migrate.

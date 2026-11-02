@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-CONFIG_PATH = Path(__file__).with_name("mapping-v1.yaml")
+CONFIG_PATH = Path(__file__).with_name("mapping-v1.1.yaml")
 
 
 def glob_to_regex(pattern: str) -> re.Pattern[str]:

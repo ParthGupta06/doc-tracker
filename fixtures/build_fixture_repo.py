@@ -151,6 +151,14 @@ def build(out: Path) -> dict[str, str]:
     write(out, "src/tokenizer.py", "def tokenize(text):\n    return text.split()\n")
     shas["c8-missing-doc"] = commit(out, 8, "Add tokenizer without documentation", "c8-missing-doc")
 
+    write(out, "src/model.py", MODEL_V3.replace("THRESHOLD = 0.6", "THRESHOLD = 0.8"))
+    write(out, "docs/model.md", "# Model (reviewed)\n\nThe threshold is still 0.6.\n")
+    shas["c9-incorrect-doc"] = commit(out, 9, "Change source and edit docs with an incorrect threshold", "c9-incorrect-doc")
+
+    write(out, "src/model.py", MODEL_V3.replace("THRESHOLD = 0.6", "THRESHOLD = 0.9"))
+    write(out, "docs/model.md", b"not a text document\x00\xff")
+    shas["c10-unreadable-doc"] = commit(out, 10, "Mapped markdown contains binary bytes", "c10-unreadable-doc")
+
     return shas
 
 

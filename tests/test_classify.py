@@ -16,7 +16,7 @@ from doctracker.system.classify import glob_to_regex, load_config
         ("models/model_config.json", "ARCHITECTURE"),
         ("docs/design/decisions.md", "DESIGN"),
         ("docs/adr/0001.md", "DESIGN"),
-        ("README.md", "OTHER"),
+        ("README.md", "DOCUMENTATION"),
         ("requirements.txt", "OTHER"),
         ("assets/logo.png", "OTHER"),
     ],
@@ -48,4 +48,4 @@ def test_single_star_stays_in_segment() -> None:
 
 
 def test_config_version() -> None:
-    assert load_config().config_version == "mapping-v1"
+    assert load_config().config_version == "mapping-v1.1"

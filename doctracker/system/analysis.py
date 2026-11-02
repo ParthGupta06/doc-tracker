@@ -10,6 +10,7 @@ from typing import Any
 
 from doctracker import __version__
 from doctracker.system.classify import load_config
+from doctracker.system.detect import detect
 from doctracker.system.gitops import Workspace
 from doctracker.system.models import AnalysisRequest
 from doctracker.system.storage import EvidenceStore
@@ -36,6 +37,9 @@ def run_analysis(req: AnalysisRequest, store: EvidenceStore) -> dict[str, Any]:
             base = ws.resolve(req.base_commit.lower()) if req.base_commit else ws.first_parent(head)
             stage = "diff"
             raw = ws.diff(base, head)
+            stage = "detect"
+            issues, unmapped, mapping_error = (detect(ws, base, head, raw, config)
+                                               if len(raw) <= config.max_changed_files else ([], [], None))
     except Exception:
         log.info("analysis stopped", extra={"analysis_id": analysis_id, "stage": stage,
                                             "duration_ms": round((time.perf_counter() - started) * 1000)})
@@ -56,7 +60,9 @@ def run_analysis(req: AnalysisRequest, store: EvidenceStore) -> dict[str, Any]:
                             "category": config.classify(rc.path)})
             if not config.is_supported(rc.path):
                 skipped.append({"path": rc.path, "reason": "UNSUPPORTED_FILE_TYPE"})
-
+    if mapping_error:
+        status = "ERROR"
+        error = mapping_error
     result: dict[str, Any] = {
         "analysis_id": analysis_id,
         "repository": req.repository,
@@ -66,15 +72,16 @@ def run_analysis(req: AnalysisRequest, store: EvidenceStore) -> dict[str, Any]:
         "tool_version": __version__,
         "status": status,
         "error": error,
-        "issues": [],
+        "issues": issues,
         "changes": changes,
         "skipped": skipped,
+        "unmapped": unmapped,
         "created_at": datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
     }
     stage = "persist"
     store.save(analysis_id, result)
     log.info("analysis completed", extra={
-        "analysis_id": analysis_id, "status": status, "changes": len(changes), "skipped": len(skipped),
+        "analysis_id": analysis_id, "status": status, "changes": len(changes), "skipped": len(skipped), "findings": len(issues),
         "head_commit": head, "base_commit": base, "config_version": config.config_version,
         "storage": store.backend, "duration_ms": round((time.perf_counter() - started) * 1000)})
     return result

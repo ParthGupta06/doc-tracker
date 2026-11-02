@@ -1,0 +1,172 @@
+# Pod contract for Teams 15 and 16: the tester API, as fixed by the course's
+# Cross-team Testing Interface (docs/base/student-facing-spec.docx.pdf), with the
+# schemas the course leaves open filled in. Test ids, components and criteria are
+# defined in pod-contract.md section 4.
+openapi: 3.1.1
+info:
+  title: Documentation Tracker Tester (Pod 15/16)
+  version: 2.4.0
+  description: >
+    A tester runs the pod's test list against one target system and reports results
+    and coverage. Paths are relative to a team's registered tester base URL.
+servers:
+  - url: https://YOUR-HOST/tester
+    description: Replace with a team's registered tester base URL (no trailing slash); the course registry lists both.
+
+paths:
+  /test/setup:
+    post:
+      summary: Create a session and wait for the target's system setup to succeed
+      description: >
+        Generates a unique session id, keeps it with target_url, and calls the target's
+        POST /test/setup with {session_id, setup: {}}. Runs no tests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetupRequest'}
+      responses:
+        '201':
+          description: Target ready; the same session id as the system returned
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionId'}
+        '400':
+          description: Invalid request (missing or malformed target_url)
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        default:
+          description: >
+            System setup failed: the system's status, message and source are passed
+            through unchanged. No system response at all gives 500 with source
+            "communication"; a failure inside the tester gives 500 with source "tester".
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+
+  /test/run:
+    post:
+      summary: Run the test list once and return the complete report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SessionId'}
+      responses:
+        '200':
+          description: Complete suite report, failed tests and system errors included
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SuiteReport'}
+        '400':
+          description: Invalid request
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '404':
+          description: Unknown session
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '409':
+          description: The session already ran or is running (also after an abort)
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '500':
+          description: The tester aborted, source "tester", including at its 570 s run limit (pod-contract.md section 6); the available results are stored for GET /test/report
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+
+  /test/report:
+    get:
+      summary: Return the stored report without running tests
+      parameters:
+        - {name: session_id, in: query, required: true, schema: {type: string, minLength: 1}}
+      responses:
+        '200':
+          description: The stored report, unchanged once the suite ends
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SuiteReport'}
+        '400':
+          description: Missing session_id
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '404':
+          description: Unknown session
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '409':
+          description: The suite has not ended; retry the lookup later
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '500':
+          description: The stored report could not be read, source "tester"
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+
+components:
+  schemas:
+    SetupRequest:
+      type: object
+      required: [target_url]
+      properties:
+        target_url:
+          type: string
+          description: A registered system base URL, for example https://host/system; no /test suffix, query, fragment or credentials
+          pattern: '^https?://[^\s?#@]+$'
+
+    SessionId:
+      type: object
+      required: [session_id]
+      properties:
+        session_id: {type: string, minLength: 1}
+
+    SuiteReport:
+      type: object
+      required: [session_id, target_url, results, coverage]
+      properties:
+        session_id: {type: string, minLength: 1}
+        target_url: {type: string}
+        results:
+          type: array
+          description: Every planned test exactly once, in run order, with unique test ids (pod-contract.md section 4)
+          items: {$ref: '#/components/schemas/TestResult'}
+        coverage:
+          type: object
+          required: [code, component, system]
+          properties:
+            code:
+              description: Copied from the system's GET /test/report
+              allOf: [{$ref: '#/components/schemas/CoverageMeasure'}]
+            component:
+              description: Components C1 to C7 exercised by a test the target answered (pod-contract.md section 5)
+              allOf: [{$ref: '#/components/schemas/CoverageMeasure'}]
+            system:
+              description: Criteria AC-01 to AC-10 exercised by a test the target answered (pod-contract.md section 5)
+              allOf: [{$ref: '#/components/schemas/CoverageMeasure'}]
+
+    TestResult:
+      type: object
+      required: [test_id, outcome, message]
+      properties:
+        test_id: {type: string, pattern: '^T-[0-9]{2}$'}
+        outcome:
+          type: string
+          enum: [pass, fail, error, skip]
+          description: >
+            pass: behavior matches (including an expected project error). fail: the
+            response could be evaluated and differs. error: a problem prevented
+            evaluation. skip: not executed.
+        message: {type: string, minLength: 1}
+        source:
+          type: string
+          enum: [tester, system, communication, unknown]
+          description: Required when outcome is error
+      if:
+        properties: {outcome: {const: error}}
+      then:
+        required: [source]
+
+    CoverageMeasure:
+      type: object
+      description: Non-negative counts with covered no greater than total; both null when unavailable, never 0 in their place.
+      required: [covered, total, basis]
+      properties:
+        covered: {type: [integer, 'null'], minimum: 0}
+        total: {type: [integer, 'null'], minimum: 0}
+        basis: {type: string, minLength: 1}
+
+    TestError:
+      type: object
+      required: [message, source]
+      properties:
+        message: {type: string, minLength: 1}
+        source: {type: string, enum: [tester, system, communication, unknown]}

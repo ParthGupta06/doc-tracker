@@ -31,7 +31,8 @@ def test_analyze_success_and_retrieve() -> None:
     assert body["base_commit"] == COMMITS["c0-initial"]
     assert body["changes"] == [{"path": "src/model.py", "old_path": None, "change_type": "MODIFIED",
                                 "category": "IMPLEMENTATION"}]
-    assert body["issues"] == []
+    assert len(body["issues"]) == 2
+    assert body["issues"][0]["issue_type"] == "OUTDATED_DOCUMENTATION"
     g = client.get(f"/system/analysis/{body['analysis_id']}")
     assert g.status_code == 200 and g.json() == body
 
@@ -86,6 +87,22 @@ def test_storage_failure_returns_500(monkeypatch: pytest.MonkeyPatch) -> None:
     assert r.status_code == 500 and r.json()["code"] == "STORAGE_FAILED"
 
 
+def test_read_failure_returns_contract_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(self: LocalStore, analysis_id: str) -> None:
+        raise StorageError("read unavailable")
+
+    monkeypatch.setattr(LocalStore, "load", boom)
+    r = client.get('/system/analysis/an-' + '1' * 32)
+    assert r.status_code == 500 and r.json()['code'] == 'STORAGE_FAILED'
+
+
+def test_historical_results_are_returned_without_schema_migration(monkeypatch: pytest.MonkeyPatch) -> None:
+    old = {'analysis_id': 'an-' + '1' * 32, 'tool_version': '0.3.0',
+           'changes': [{'path': 'src/model.py', 'category': 'IMPLEMENTATION', 'change_type': 'MODIFIED'}]}
+    monkeypatch.setattr(system_module.store, 'load', lambda aid: old)
+    assert client.get('/system/analysis/' + old['analysis_id']).json() == old
+
+
 def test_evidence_files_are_not_overwritten(tmp_path: Path) -> None:
     store = LocalStore(str(tmp_path))
     store.save("an-" + "1" * 32, {"a": 1})
@@ -136,10 +153,10 @@ def test_full_suite_against_in_process_system(monkeypatch: pytest.MonkeyPatch) -
     assert run.status_code == 200
     report = run.json()
     ids = [r["test_id"] for r in report["results"]]
-    assert len(ids) == len(set(ids)) == 23
+    assert len(ids) == len(set(ids)) == 33
     failed = [r for r in report["results"] if r["outcome"] not in ("pass", "skip")]
     assert failed == []
-    assert report["coverage"]["system"] == {**report["coverage"]["system"], "covered": 5, "total": 10}
+    assert report["coverage"]["system"] == {**report["coverage"]["system"], "covered": 8, "total": 10}
     assert client.post("/tester/test/run", json={"session_id": sid}).status_code == 409
     assert client.get("/tester/test/report", params={"session_id": sid}).json() == report
     assert sid in system_module.sessions

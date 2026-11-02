@@ -1,0 +1,438 @@
+# Pod contract for Teams 15 and 16: the system API both teams' testers call.
+# Built on Team 16's v1.1 package with two deviations in behavior (pod-contract.md section 1); section 9 lists every difference.
+openapi: 3.1.1
+info:
+  title: Documentation Tracker System (Pod 15/16)
+  version: 2.4.0
+  description: >
+    Project API and course testing endpoints of the Documentation Tracker pod.
+    Paths are relative to a team's registered system base URL. Testing rules
+    (fixtures, expected answers, test list, coverage, limits) are in
+    pod-contract.md beside this file; shared classification rules are in
+    mapping-v1.1.yaml and expected answers in golden-outputs.json, both beside it.
+servers:
+  - url: https://YOUR-HOST/system
+    description: Replace with a team's registered system base URL (no trailing slash); the course registry lists both.
+
+paths:
+  /analyze:
+    post:
+      summary: Analyze a commit against its base and save the result
+      description: >
+        Resolves commit_id and its base (base_commit, else the first parent, else the
+        empty tree for a root commit), lists every changed path classified under
+        mapping-v1.1.yaml, saves the result write-once and returns it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AnalysisRequest'}
+      responses:
+        '200':
+          description: >
+            Analysis ran and its result was saved. status is SUCCESS, or ERROR when
+            the analysis ran but a required check could not complete (error.code
+            CHANGE_LIMIT_EXCEEDED or MAPPING_UNSUPPORTED).
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalysisResult'}
+        '400':
+          description: INVALID_REQUEST (missing field, malformed JSON, bad format, wrong type). Never 422.
+          content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+        '404':
+          description: REPOSITORY_NOT_FOUND or COMMIT_NOT_FOUND. Nothing is saved.
+          content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+        '500':
+          description: ANALYSIS_FAILED (timeout, Git failure, unforeseen failure) or STORAGE_FAILED (result not saved). Never reported as success.
+          content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+
+  /analysis/{analysis_id}:
+    get:
+      summary: Return a saved result unchanged
+      parameters:
+        - {name: analysis_id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: The saved result, identical to the original POST /analyze body
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalysisResult'}
+        '404':
+          description: ANALYSIS_NOT_FOUND, for an unknown or malformed analysis_id
+          content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+        '500':
+          description: STORAGE_FAILED (saved result could not be read)
+          content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+
+  /generate:
+    post:
+      summary: Build the four /models files at a commit (optional, Team 15 only)
+      description: >
+        Optional. Returns the exact text of each /models file as drifter init would
+        write it, so a tester can compare it byte for byte with the committed files.
+        A tester skips T-33 when the target's GET /health does not list model_drift
+        (pod-contract.md section 1); a 404 here means REPOSITORY_NOT_FOUND or
+        COMMIT_NOT_FOUND, never a missing route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AnalysisRequest'}
+      responses:
+        '200':
+          description: The four model files
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GenerateResult'}
+        '400':
+          description: INVALID_REQUEST
+          content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+        '404':
+          description: REPOSITORY_NOT_FOUND or COMMIT_NOT_FOUND
+          content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+        '500':
+          description: ANALYSIS_FAILED
+          content: {application/json: {schema: {$ref: '#/components/schemas/ErrorBody'}}}
+
+  /health:
+    get:
+      summary: Liveness check
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Health'}
+
+  /test/setup:
+    post:
+      summary: Prepare a test session (course-fixed)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TestSetupRequest'}
+      responses:
+        '201':
+          description: Ready; returns the same session_id
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SessionId'}
+        '400':
+          description: Invalid request
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '409':
+          description: session_id already exists, or another session is active, with message "another test session is active" (pod-contract.md section 2)
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '500':
+          description: Preparation failed, source "system"
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+
+  /test/report:
+    get:
+      summary: Code coverage for the session since setup (course-fixed)
+      parameters:
+        - {name: session_id, in: query, required: true, schema: {type: string, minLength: 1}}
+      responses:
+        '200':
+          description: Coverage measured since setup
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CoverageReport'}
+        '400':
+          description: Missing session_id
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '404':
+          description: Unknown session
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '409':
+          description: >
+            Preparation still in progress. Required by the course spec, although
+            Team 16's v1.1 file leaves it out.
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+        '500':
+          description: Coverage could not be read, source "system"
+          content: {application/json: {schema: {$ref: '#/components/schemas/TestError'}}}
+
+components:
+  schemas:
+    # -------------------------------------------------------- shared (from v1.1)
+    Health:
+      type: object
+      required: [status, tool_version, config_version]
+      properties:
+        status: {type: string, const: ok}
+        tool_version: {type: string}
+        config_version: {type: string, examples: [mapping-v1.1]}
+        storage: {type: string, description: 'Informational, for example local or github'}
+        features:
+          type: array
+          items: {type: string, enum: [prose_detector, model_drift]}
+          description: >
+            Optional parts this system implements (pod-contract.md section 1). Absent
+            means [prose_detector]. A tester skips, never fails, a test whose feature
+            is not listed.
+
+    AnalysisRequest:
+      type: object
+      description: Unknown fields are ignored.
+      required: [repository, commit_id]
+      additionalProperties: true
+      properties:
+        repository:
+          type: string
+          description: Public GitHub repository as owner/name. A bare name is INVALID_REQUEST.
+          pattern: '^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$'
+        commit_id:
+          type: string
+          description: Head commit SHA, 7 to 40 hex
+          pattern: '^[0-9a-fA-F]{7,40}$'
+        base_commit:
+          type: [string, 'null']
+          description: Omitted or null means the first parent of commit_id, or the empty tree for a root commit.
+          pattern: '^[0-9a-fA-F]{7,40}$'
+
+    AnalysisResult:
+      type: object
+      description: >
+        Every required field is shared by both systems. drift and drift_error are
+        optional and only Team 15's system returns them (deviation 2); no other key
+        may be added.
+      additionalProperties: false
+      required: [analysis_id, repository, head_commit, base_commit, config_version,
+                 tool_version, status, error, issues, changes, skipped, unmapped, created_at]
+      properties:
+        analysis_id: {type: string, pattern: '^an-[0-9a-f]{32}$'}
+        repository: {type: string}
+        head_commit: {type: string, pattern: '^[0-9a-f]{40}$', description: Always the full SHA}
+        base_commit:
+          type: [string, 'null']
+          pattern: '^[0-9a-f]{40}$'
+          description: Full SHA, or null for a root commit (compared against the empty tree)
+        config_version: {type: string, examples: [mapping-v1.1]}
+        tool_version: {type: string}
+        status: {type: string, enum: [SUCCESS, ERROR]}
+        error:
+          oneOf:
+            - {type: 'null'}
+            - {$ref: '#/components/schemas/ErrorBody'}
+        issues:
+          type: array
+          description: >
+            Prose documentation findings from the v1.1 SPEC section 6 detector, on a
+            system that has one; [] on a system without it (Team 15, deviation 1).
+            Sorted by (code_file, issue_type, fact with null as "").
+          items: {$ref: '#/components/schemas/Finding'}
+        changes:
+          type: array
+          description: Sorted by (path, old_path with null as "")
+          items: {$ref: '#/components/schemas/Change'}
+        skipped:
+          type: array
+          description: Sorted by path
+          items: {$ref: '#/components/schemas/Skipped'}
+        unmapped:
+          type: array
+          description: >
+            ADDED, MODIFIED, RENAMED, COPIED or TYPE_CHANGED paths of category
+            IMPLEMENTATION with no entry in mapping-v1.1.yaml mappings. Sorted.
+          items: {type: string}
+        created_at: {type: string, format: date-time, description: 'ISO 8601 UTC, for example 2026-10-30T21:22:18.332Z'}
+        drift:
+          description: >
+            Optional (Team 15). The model check's answer, or null when there is no
+            verdict. aligned is true only when all three lists are empty. The model
+            check runs whatever status is.
+          oneOf:
+            - {$ref: '#/components/schemas/Drift'}
+            - {type: 'null'}
+        drift_error:
+          description: >
+            Optional (Team 15). Why drift is null; null when drift has a verdict.
+            drift_error never changes status.
+          oneOf:
+            - {$ref: '#/components/schemas/DriftError'}
+            - {type: 'null'}
+
+    Change:
+      type: object
+      additionalProperties: false
+      required: [path, old_path, change_type, category]
+      properties:
+        path: {type: string}
+        old_path: {type: [string, 'null'], description: Set only for RENAMED and COPIED}
+        change_type: {type: string, enum: [ADDED, MODIFIED, DELETED, RENAMED, COPIED, TYPE_CHANGED]}
+        category:
+          type: string
+          description: Decided by mapping-v1.1.yaml, categories tried in file order, first match wins
+          enum: [REQUIREMENT, SPECIFICATION, ARCHITECTURE, DESIGN, IMPLEMENTATION, DOCUMENTATION, OTHER]
+
+    Skipped:
+      type: object
+      additionalProperties: false
+      required: [path, reason]
+      properties:
+        path: {type: string}
+        reason:
+          type: string
+          description: A path whose extension and name are not on the mapping-v1.1.yaml allowlist
+          enum: [UNSUPPORTED_FILE_TYPE]
+
+    Finding:
+      type: object
+      additionalProperties: false
+      required: [finding_id, issue_type, code_file, documentation_file, change_category, fact,
+                 explanation, verification_status]
+      properties:
+        finding_id:
+          type: string
+          pattern: '^fnd-[0-9a-f]{16}$'
+          description: "First 16 hex chars of sha256(\"{head_commit}|{issue_type}|{code_file}|{documentation_file}|{fact or ''}\")"
+        issue_type:
+          type: string
+          enum: [MISSING_DOCUMENTATION, OUTDATED_DOCUMENTATION, ORPHANED_DOCUMENTATION,
+                 UNDOCUMENTED_SYMBOL, STALE_SIGNATURE, STALE_VALUE, STALE_REFERENCE]
+        code_file: {type: string}
+        documentation_file: {type: string, description: "The mapped document path, even when it does not exist"}
+        change_category: {type: string, const: IMPLEMENTATION}
+        fact:
+          type: [string, 'null']
+          description: Symbol for section 6.3 findings (for example THRESHOLD, predict.weights); null for section 6.2
+        explanation: {type: string, minLength: 1, description: For people; never compared by tests}
+        verification_status: {type: string, const: PENDING_REVIEW}
+
+    ErrorBody:
+      type: object
+      description: >
+        HTTP errors use the first six codes. CHANGE_LIMIT_EXCEEDED and
+        MAPPING_UNSUPPORTED appear only inside a saved 200 result's error field.
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [INVALID_REQUEST, REPOSITORY_NOT_FOUND, COMMIT_NOT_FOUND, ANALYSIS_NOT_FOUND,
+                 ANALYSIS_FAILED, STORAGE_FAILED, CHANGE_LIMIT_EXCEEDED, MAPPING_UNSUPPORTED]
+        message: {type: string, minLength: 1}
+
+    # ------------------------------------------------- optional additions (Team 15)
+    Drift:
+      type: object
+      description: >
+        The four-field answer. Keys sorted; each list sorted (structural and
+        behavioral by id, ownership by commit SHA then path, compared as strings)
+        and empty when that model matches.
+      required: [aligned, behavioral, ownership, structural]
+      additionalProperties: false
+      properties:
+        aligned: {type: boolean}
+        behavioral:
+          type: array
+          items: {$ref: '#/components/schemas/ModelDifference'}
+        ownership:
+          type: array
+          items: {$ref: '#/components/schemas/OwnershipViolation'}
+        structural:
+          type: array
+          items: {$ref: '#/components/schemas/ModelDifference'}
+
+    ModelDifference:
+      type: object
+      description: >
+        Reported from the code's side: ADDED is in the code but not the model,
+        REMOVED is in the model but not the code, MODIFIED is the same id with
+        different attributes. Element kinds and ids are defined in Team 15's
+        specification, not here.
+      required: [change, file, id, kind]
+      additionalProperties: false
+      properties:
+        change: {type: string, enum: [ADDED, REMOVED, MODIFIED]}
+        file: {type: string}
+        id: {type: string}
+        kind: {type: string}
+
+    OwnershipViolation:
+      type: object
+      description: A non-merge commit changed a path whose owners do not include its git author.
+      required: [author, change, commit, owners, path]
+      additionalProperties: false
+      properties:
+        author: {type: string, description: Git author email in lowercase}
+        change: {type: string, const: VIOLATION}
+        commit: {type: string, description: Full 40-character SHA}
+        owners: {type: array, items: {type: string}, description: "The matching rule's owners, as lowercase emails sorted as strings; the author is compared with them in lowercase"}
+        path: {type: string}
+
+    DriftError:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum: [MODELS_NOT_FOUND, INVALID_MODELS, PARSE_FAILED, FILE_TOO_LARGE]
+          description: >
+            MODELS_NOT_FOUND: no /models, or a file in it is missing.
+            INVALID_MODELS: a /models file fails its schema.
+            PARSE_FAILED: an in-scope file cannot be parsed, or is binary or not UTF-8.
+            FILE_TOO_LARGE: an in-scope file is over 1 MB.
+        message: {type: string, minLength: 1, description: Names the file and, for a syntax error, the line}
+
+    GenerateResult:
+      type: object
+      required: [repository, head_commit, tool_version, files]
+      properties:
+        repository: {type: string}
+        head_commit: {type: string}
+        tool_version: {type: string}
+        files:
+          type: object
+          description: Exact text of each file, byte for byte as drifter init writes it
+          required: [behavioral.json, ownership.json, scope.json, structural.json]
+          additionalProperties: false
+          properties:
+            behavioral.json: {type: string}
+            ownership.json: {type: string}
+            scope.json: {type: string}
+            structural.json: {type: string}
+
+    # ----------------------------------------------------- course testing interface
+    TestSetupRequest:
+      type: object
+      required: [session_id]
+      properties:
+        session_id: {type: string, minLength: 1}
+        setup: {type: object, description: 'Pod setup data: always {}'}
+
+    SessionId:
+      type: object
+      required: [session_id]
+      properties:
+        session_id: {type: string, minLength: 1}
+
+    TestError:
+      type: object
+      required: [message, source]
+      properties:
+        message: {type: string, minLength: 1}
+        source: {type: string, enum: [tester, system, communication, unknown]}
+
+    CoverageReport:
+      type: object
+      required: [session_id, coverage]
+      properties:
+        session_id: {type: string}
+        coverage:
+          type: object
+          required: [code]
+          properties:
+            code: {$ref: '#/components/schemas/CoverageMeasure'}
+
+    CoverageMeasure:
+      type: object
+      description: Both counts null when unavailable, never 0 in their place.
+      required: [covered, total, basis]
+      properties:
+        covered: {type: [integer, 'null'], minimum: 0}
+        total: {type: [integer, 'null'], minimum: 0}
+        basis: {type: string, minLength: 1}

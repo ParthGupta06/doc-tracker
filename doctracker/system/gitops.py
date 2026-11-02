@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 GIT_TIMEOUT_SECONDS = 60
+MAX_TEXT_BYTES = 1_000_000
 
 STATUS_NAMES = {
     "A": "ADDED",
@@ -35,6 +36,10 @@ class CommitNotFound(Exception):
 
 
 class GitFailure(Exception):
+    pass
+
+
+class FileUnreadable(GitFailure):
     pass
 
 
@@ -143,3 +148,23 @@ class Workspace:
                 changes.append(RawChange(path=tokens[i + 1], change_type=STATUS_NAMES.get(code, "MODIFIED"), old_path=None))
                 i += 2
         return changes
+
+    def read_text(self, commit: str, path: str) -> str | None:
+        """Read a bounded regular blob without checkout, symlink following or execution."""
+        try:
+            entries = self._git('ls-tree', '-z', commit, '--', f':(literal){path}').stdout
+            if not entries:
+                return None
+            metadata, name = entries.rstrip('\0').split('\t', 1)
+            mode, kind, oid = metadata.split()
+            if name != path or mode not in ('100644', '100755') or kind != 'blob':
+                raise FileUnreadable(path)
+            size = int(self._git('cat-file', '-s', oid).stdout)
+            if size > MAX_TEXT_BYTES:
+                raise FileUnreadable(path)
+            data = self._git('cat-file', 'blob', oid).stdout
+            if '\0' in data:
+                raise FileUnreadable(path)
+            return data
+        except (GitFailure, UnicodeError, ValueError) as exc:
+            raise FileUnreadable(path) from exc

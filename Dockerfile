@@ -5,6 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY doctracker ./doctracker
+COPY docs/contract ./docs/contract
 RUN useradd --create-home appuser && mkdir -p /app/data && chown appuser /app/data
 USER appuser
 ENV PYTHONUNBUFFERED=1 PORT=8000

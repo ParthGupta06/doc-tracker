@@ -1,0 +1,457 @@
+{
+  "fixture_repo": "ParthGupta06/doc-tracker-fixtures",
+  "config_version": "mapping-v1.1",
+  "cases": [
+    {
+      "case": "c0-initial",
+      "request": {
+        "commit_id": "d19092e138ea3f9788a8eac76005ee53d22940da"
+      },
+      "expected": {
+        "head_commit": "d19092e138ea3f9788a8eac76005ee53d22940da",
+        "base_commit": null,
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "LICENSE",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "OTHER"
+          },
+          {
+            "path": "README.md",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "DOCUMENTATION"
+          },
+          {
+            "path": "assets/logo.png",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "OTHER"
+          },
+          {
+            "path": "docs/architecture/overview.md",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "ARCHITECTURE"
+          },
+          {
+            "path": "docs/design/decisions.md",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "DESIGN"
+          },
+          {
+            "path": "docs/model.md",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "DOCUMENTATION"
+          },
+          {
+            "path": "docs/training.md",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "DOCUMENTATION"
+          },
+          {
+            "path": "requirements/REQUIREMENTS.md",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "REQUIREMENT"
+          },
+          {
+            "path": "specs/api.yaml",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "SPECIFICATION"
+          },
+          {
+            "path": "src/model.py",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "IMPLEMENTATION"
+          },
+          {
+            "path": "src/train.py",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "IMPLEMENTATION"
+          }
+        ],
+        "skipped": [
+          {
+            "path": "assets/logo.png",
+            "reason": "UNSUPPORTED_FILE_TYPE"
+          }
+        ],
+        "unmapped": [],
+        "issues": []
+      }
+    },
+    {
+      "case": "c1-impl-only",
+      "request": {
+        "commit_id": "add930c827b4f242d173fe6d26ebc068c8dd65fb"
+      },
+      "expected": {
+        "head_commit": "add930c827b4f242d173fe6d26ebc068c8dd65fb",
+        "base_commit": "d19092e138ea3f9788a8eac76005ee53d22940da",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "src/model.py",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "IMPLEMENTATION"
+          }
+        ],
+        "skipped": [],
+        "unmapped": [],
+        "issues": [
+          {
+            "finding_id": "fnd-cf2d5bdc6d90ec2f",
+            "issue_type": "OUTDATED_DOCUMENTATION",
+            "code_file": "src/model.py",
+            "documentation_file": "docs/model.md",
+            "change_category": "IMPLEMENTATION",
+            "fact": null,
+            "explanation": "src/model.py changed but docs/model.md was not updated in this diff.",
+            "verification_status": "PENDING_REVIEW"
+          },
+          {
+            "finding_id": "fnd-310c7398cef5519e",
+            "issue_type": "UNDOCUMENTED_SYMBOL",
+            "code_file": "src/model.py",
+            "documentation_file": "docs/model.md",
+            "change_category": "IMPLEMENTATION",
+            "fact": "THRESHOLD",
+            "explanation": "New public constant THRESHOLD is not mentioned in docs/model.md.",
+            "verification_status": "PENDING_REVIEW"
+          }
+        ]
+      }
+    },
+    {
+      "case": "c2-add-mod-del",
+      "request": {
+        "commit_id": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6"
+      },
+      "expected": {
+        "head_commit": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
+        "base_commit": "add930c827b4f242d173fe6d26ebc068c8dd65fb",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "docs/model.md",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "DOCUMENTATION"
+          },
+          {
+            "path": "src/eval.py",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "IMPLEMENTATION"
+          },
+          {
+            "path": "src/train.py",
+            "old_path": null,
+            "change_type": "DELETED",
+            "category": "IMPLEMENTATION"
+          }
+        ],
+        "skipped": [],
+        "unmapped": [
+          "src/eval.py"
+        ],
+        "issues": [
+          {
+            "finding_id": "fnd-7226b74ebd76fb0e",
+            "issue_type": "ORPHANED_DOCUMENTATION",
+            "code_file": "src/train.py",
+            "documentation_file": "docs/training.md",
+            "change_category": "IMPLEMENTATION",
+            "fact": null,
+            "explanation": "src/train.py was deleted but docs/training.md still exists.",
+            "verification_status": "PENDING_REVIEW"
+          }
+        ]
+      }
+    },
+    {
+      "case": "c3-rename",
+      "request": {
+        "commit_id": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49"
+      },
+      "expected": {
+        "head_commit": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
+        "base_commit": "332e59e3ba2b1a6c1a454ee75c3a71dfea0b4ff6",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "src/evaluate.py",
+            "old_path": "src/eval.py",
+            "change_type": "RENAMED",
+            "category": "IMPLEMENTATION"
+          }
+        ],
+        "skipped": [],
+        "unmapped": [
+          "src/evaluate.py"
+        ],
+        "issues": []
+      }
+    },
+    {
+      "case": "c4-categories",
+      "request": {
+        "commit_id": "55e4b15ba4ce0a9e0923bffe1335c013b7c6ae07"
+      },
+      "expected": {
+        "head_commit": "55e4b15ba4ce0a9e0923bffe1335c013b7c6ae07",
+        "base_commit": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "docs/architecture/overview.md",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "ARCHITECTURE"
+          },
+          {
+            "path": "docs/design/decisions.md",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "DESIGN"
+          },
+          {
+            "path": "requirements/REQUIREMENTS.md",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "REQUIREMENT"
+          },
+          {
+            "path": "specs/api.yaml",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "SPECIFICATION"
+          }
+        ],
+        "skipped": [],
+        "unmapped": [],
+        "issues": []
+      }
+    },
+    {
+      "case": "c5-docs-only",
+      "request": {
+        "commit_id": "807e7bbc587d8a04731a850546e6acdb175a4392"
+      },
+      "expected": {
+        "head_commit": "807e7bbc587d8a04731a850546e6acdb175a4392",
+        "base_commit": "55e4b15ba4ce0a9e0923bffe1335c013b7c6ae07",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "README.md",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "DOCUMENTATION"
+          },
+          {
+            "path": "docs/training.md",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "DOCUMENTATION"
+          }
+        ],
+        "skipped": [],
+        "unmapped": [],
+        "issues": []
+      }
+    },
+    {
+      "case": "c6-binary",
+      "request": {
+        "commit_id": "8adab1b196fab4a522459716d96f2942665b222c"
+      },
+      "expected": {
+        "head_commit": "8adab1b196fab4a522459716d96f2942665b222c",
+        "base_commit": "807e7bbc587d8a04731a850546e6acdb175a4392",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "assets/logo.png",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "OTHER"
+          },
+          {
+            "path": "data/weights.bin",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "OTHER"
+          }
+        ],
+        "skipped": [
+          {
+            "path": "assets/logo.png",
+            "reason": "UNSUPPORTED_FILE_TYPE"
+          },
+          {
+            "path": "data/weights.bin",
+            "reason": "UNSUPPORTED_FILE_TYPE"
+          }
+        ],
+        "unmapped": [],
+        "issues": []
+      }
+    },
+    {
+      "case": "c7-code-and-doc",
+      "request": {
+        "commit_id": "cb9fd8c094a53c99aec7203c12bc396f0b9bfac6"
+      },
+      "expected": {
+        "head_commit": "cb9fd8c094a53c99aec7203c12bc396f0b9bfac6",
+        "base_commit": "8adab1b196fab4a522459716d96f2942665b222c",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "docs/model.md",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "DOCUMENTATION"
+          },
+          {
+            "path": "src/model.py",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "IMPLEMENTATION"
+          }
+        ],
+        "skipped": [],
+        "unmapped": [],
+        "issues": []
+      }
+    },
+    {
+      "case": "c8-missing-doc",
+      "request": {
+        "commit_id": "912b0b88a52b14c5be2accffb5c2aff92c2f59e5"
+      },
+      "expected": {
+        "head_commit": "912b0b88a52b14c5be2accffb5c2aff92c2f59e5",
+        "base_commit": "cb9fd8c094a53c99aec7203c12bc396f0b9bfac6",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "src/tokenizer.py",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "IMPLEMENTATION"
+          }
+        ],
+        "skipped": [],
+        "unmapped": [],
+        "issues": [
+          {
+            "finding_id": "fnd-27612ad1d4254c0a",
+            "issue_type": "MISSING_DOCUMENTATION",
+            "code_file": "src/tokenizer.py",
+            "documentation_file": "docs/tokenizer.md",
+            "change_category": "IMPLEMENTATION",
+            "fact": null,
+            "explanation": "src/tokenizer.py changed and its mapped document docs/tokenizer.md does not exist.",
+            "verification_status": "PENDING_REVIEW"
+          }
+        ]
+      }
+    },
+    {
+      "case": "c0-to-c3-explicit-base",
+      "request": {
+        "commit_id": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
+        "base_commit": "d19092e138ea3f9788a8eac76005ee53d22940da"
+      },
+      "expected": {
+        "head_commit": "9b03117ff9c5bfcaeb49eedfccd04aa07547ed49",
+        "base_commit": "d19092e138ea3f9788a8eac76005ee53d22940da",
+        "config_version": "mapping-v1.1",
+        "status": "SUCCESS",
+        "error": null,
+        "changes": [
+          {
+            "path": "docs/model.md",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "DOCUMENTATION"
+          },
+          {
+            "path": "src/evaluate.py",
+            "old_path": null,
+            "change_type": "ADDED",
+            "category": "IMPLEMENTATION"
+          },
+          {
+            "path": "src/model.py",
+            "old_path": null,
+            "change_type": "MODIFIED",
+            "category": "IMPLEMENTATION"
+          },
+          {
+            "path": "src/train.py",
+            "old_path": null,
+            "change_type": "DELETED",
+            "category": "IMPLEMENTATION"
+          }
+        ],
+        "skipped": [],
+        "unmapped": [
+          "src/evaluate.py"
+        ],
+        "issues": [
+          {
+            "finding_id": "fnd-fb3755e9570b5615",
+            "issue_type": "UNDOCUMENTED_SYMBOL",
+            "code_file": "src/model.py",
+            "documentation_file": "docs/model.md",
+            "change_category": "IMPLEMENTATION",
+            "fact": "THRESHOLD",
+            "explanation": "New public constant THRESHOLD is not mentioned in docs/model.md.",
+            "verification_status": "PENDING_REVIEW"
+          },
+          {
+            "finding_id": "fnd-00c462bccf75cec3",
+            "issue_type": "ORPHANED_DOCUMENTATION",
+            "code_file": "src/train.py",
+            "documentation_file": "docs/training.md",
+            "change_category": "IMPLEMENTATION",
+            "fact": null,
+            "explanation": "src/train.py was deleted but docs/training.md still exists.",
+            "verification_status": "PENDING_REVIEW"
+          }
+        ]
+      }
+    }
+  ]
+}

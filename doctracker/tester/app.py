@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import time
 import uuid
 from typing import Any
 from urllib.parse import urlsplit
@@ -14,16 +13,21 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from jsonschema import ValidationError
 from pydantic import BaseModel, StrictStr
 
 from doctracker import __version__
+from doctracker.tester.contract import validate
 from doctracker.tester.suite import ACCEPTANCE_CRITERIA, COMPONENTS, TESTS, Ctx, Fail, SystemError_
 
 log = logging.getLogger("doctracker.tester")
 
 FIXTURE_REPO = os.environ.get("FIXTURE_REPO", "OWNER/doc-tracker-fixtures")
-SETUP_TIMEOUT = float(os.environ.get("TESTER_SETUP_TIMEOUT", "90"))
-CALL_TIMEOUT = float(os.environ.get("TESTER_CALL_TIMEOUT", "90"))
+SETUP_TIMEOUT = min(float(os.environ.get("TESTER_SETUP_TIMEOUT", "110")), 110.0)
+CALL_TIMEOUT = min(float(os.environ.get("TESTER_CALL_TIMEOUT", "90")), 90.0)
+RUN_LIMIT = 570.0
+REPORT_TIMEOUT = 15.0
+HEALTH_TIMEOUT = 90.0
 
 app = FastAPI(title="Documentation Tracker Tester", version=__version__,
               description="Team 16 automated suite for the Teams 15/16 pod project API.")
@@ -76,8 +80,9 @@ async def setup(body: SetupBody) -> Any:
     session_id = str(uuid.uuid4())
     try:
         async with httpx.AsyncClient(timeout=SETUP_TIMEOUT) as client:
-            resp = await client.post(f"{target}/test/setup", json={"session_id": session_id, "setup": {}})
-    except httpx.HTTPError as exc:
+            resp = await asyncio.wait_for(
+                client.post(f"{target}/test/setup", json={"session_id": session_id, "setup": {}}), SETUP_TIMEOUT)
+    except (httpx.HTTPError, TimeoutError) as exc:
         log.warning("system setup unreachable", extra={"target_url": target, "error": type(exc).__name__})
         return err(500, f"system setup could not be reached: {type(exc).__name__}", "communication")
     if resp.status_code != 201:
@@ -123,13 +128,37 @@ def valid_code_coverage(value: Any) -> bool:
     return isinstance(cov, int) and isinstance(tot, int) and 0 <= cov <= tot
 
 
-async def fetch_code_coverage(client: httpx.AsyncClient, target: str, session_id: str) -> dict[str, Any] | None:
+def unavailable_coverage(reason: str) -> dict[str, Any]:
+    return {"covered": None, "total": None, "basis": "Source lines unavailable: " + reason}
+
+
+async def fetch_code_coverage(client: httpx.AsyncClient, target: str, session_id: str) -> dict[str, Any]:
     try:
-        resp = await client.get(f"{target}/test/report", params={"session_id": session_id})
-        code = resp.json().get("coverage", {}).get("code") if resp.status_code == 200 else None
-    except (httpx.HTTPError, ValueError, AttributeError):
-        code = None
-    return code if valid_code_coverage(code) else None
+        resp = await asyncio.wait_for(client.get(f"{target}/test/report", params={"session_id": session_id},
+                                                timeout=REPORT_TIMEOUT), REPORT_TIMEOUT)
+        if resp.status_code != 200:
+            return unavailable_coverage(f"system report returned HTTP {resp.status_code}")
+        code = resp.json().get("coverage", {}).get("code")
+    except (httpx.HTTPError, TimeoutError) as exc:
+        return unavailable_coverage(type(exc).__name__ + " reading system report")
+    except (ValueError, AttributeError):
+        return unavailable_coverage("invalid system report body")
+    return code if valid_code_coverage(code) else unavailable_coverage("invalid code coverage shape")
+
+
+async def target_features(client: httpx.AsyncClient, target: str) -> tuple[set[str] | None, str | None]:
+    try:
+        response = await asyncio.wait_for(client.get(f'{target}/health', timeout=HEALTH_TIMEOUT), HEALTH_TIMEOUT)
+    except (httpx.HTTPError, TimeoutError):
+        return None, 'communication'
+    try:
+        if response.status_code != 200:
+            return None, 'system'
+        body = response.json()
+        validate(body, 'Health')
+        return set(body.get('features', ['prose_detector'])), None
+    except (ValueError, ValidationError):
+        return None, 'system'
 
 
 @app.post("/test/run", tags=["testing"])
@@ -143,58 +172,69 @@ async def run(body: RunBody) -> Any:
         session["state"] = "running"
     target = session["target_url"]
     results: list[dict[str, Any]] = []
-    executed: list[Any] = []
-    started = time.perf_counter()
-    try:
-        async with httpx.AsyncClient(timeout=CALL_TIMEOUT) as client:
-            ctx = Ctx(client=client, target=target, fixture_repo=FIXTURE_REPO)
+    covered: list[Any] = []
+    current: str | None = None
+    aborted: str | None = None
+    async with httpx.AsyncClient(timeout=CALL_TIMEOUT) as client:
+        ctx = Ctx(client=client, target=target, fixture_repo=FIXTURE_REPO)
+
+        async def execute() -> None:
+            nonlocal current
+            features, health_error = await target_features(client, target)
             for case in TESTS:
+                current = case.test_id
                 if case.fn is None:
-                    results.append({"test_id": case.test_id, "outcome": "skip",
-                                    "message": f"{case.title}: {case.skip_reason}"})
+                    results.append({'test_id': current, 'outcome': 'skip', 'message': case.skip_reason})
+                    current = None
                     continue
-                executed.append(case)
+                if case.feature and features is None:
+                    results.append({'test_id': current, 'outcome': 'error', 'source': health_error,
+                                    'message': 'target features unknown because /health failed'})
+                    current = None
+                    continue
+                if case.feature and case.feature not in (features or set()):
+                    results.append({'test_id': current, 'outcome': 'skip',
+                                    'message': f'target does not implement {case.feature}'})
+                    current = None
+                    continue
+                ctx.answered = False
                 try:
                     message = await case.fn(ctx)
-                    results.append({"test_id": case.test_id, "outcome": "pass", "message": f"{case.title}: {message}"})
+                    result = {'test_id': current, 'outcome': 'pass', 'message': message}
                 except Fail as exc:
-                    results.append({"test_id": case.test_id, "outcome": "fail", "message": f"{case.title}: {exc}"})
+                    result = {'test_id': current, 'outcome': 'fail', 'message': str(exc)}
                 except SystemError_ as exc:
-                    results.append({"test_id": case.test_id, "outcome": "error", "source": "system",
-                                    "message": f"{case.title}: {exc}"})
-                except httpx.TimeoutException:
-                    results.append({"test_id": case.test_id, "outcome": "error", "source": "communication",
-                                    "message": f"{case.title}: request timed out. No response was available to evaluate."})
-                except httpx.HTTPError as exc:
-                    results.append({"test_id": case.test_id, "outcome": "error", "source": "communication",
-                                    "message": f"{case.title}: {type(exc).__name__} contacting the system."})
-                log.info("test finished", extra={"session_id": body.session_id, "test_id": case.test_id,
-                                                 "outcome": results[-1]["outcome"]})
-            code = await fetch_code_coverage(client, target, body.session_id)
-    except Exception as exc:
-        log.exception("tester aborted", extra={"session_id": body.session_id})
-        done = {r["test_id"] for r in results}
-        aborted_id = next((t.test_id for t in TESTS if t.test_id not in done), None)
-        for case in TESTS:
-            if case.test_id in done:
-                continue
-            if case.test_id == aborted_id:
-                results.append({"test_id": case.test_id, "outcome": "error", "source": "tester",
-                                "message": f"{case.title}: tester aborted ({type(exc).__name__})."})
-            else:
-                results.append({"test_id": case.test_id, "outcome": "skip",
-                                "message": f"{case.title}: not executed because the tester aborted."})
-        session["report"] = {"session_id": body.session_id, "target_url": target, "results": results,
-                             "coverage": coverage_block(executed, None)}
-        session["state"] = "aborted"
-        return err(500, "tester aborted; retrieve available results with GET /test/report")
-    report = {"session_id": body.session_id, "target_url": target, "results": results,
-              "coverage": coverage_block(executed, code)}
-    session["report"] = report
-    session["state"] = "done"
-    counts = {o: sum(1 for r in results if r["outcome"] == o) for o in ("pass", "fail", "error", "skip")}
-    log.info("suite finished", extra={"session_id": body.session_id, "target_url": target, **counts,
-                                      "duration_ms": round((time.perf_counter() - started) * 1000)})
+                    result = {'test_id': current, 'outcome': 'error', 'source': 'system', 'message': str(exc)}
+                except (httpx.HTTPError, TimeoutError) as exc:
+                    result = {'test_id': current, 'outcome': 'error', 'source': 'communication',
+                              'message': type(exc).__name__ + ' contacting the system'}
+                results.append(result)
+                if ctx.answered and (result['outcome'] in ('pass', 'fail') or result.get('source') == 'system'):
+                    covered.append(case)
+                current = None
+        try:
+            await asyncio.wait_for(execute(), timeout=RUN_LIMIT)
+        except TimeoutError:
+            aborted = 'tester run limit reached'
+        except Exception as exc:
+            log.exception('tester aborted')
+            aborted = f'tester aborted ({type(exc).__name__})'
+        if aborted:
+            done = {r['test_id'] for r in results}
+            for case in TESTS:
+                if case.test_id not in done:
+                    r = {'test_id': case.test_id, 'outcome': 'error' if case.test_id == current else 'skip',
+                         'message': aborted}
+                    if case.test_id == current:
+                        r['source'] = 'tester'
+                    results.append(r)
+        code = await fetch_code_coverage(client, target, body.session_id)
+    report = {'session_id': body.session_id, 'target_url': target, 'results': results,
+              'coverage': coverage_block(covered, code)}
+    session['report'] = report
+    session['state'] = 'aborted' if aborted else 'done'
+    if aborted:
+        return err(500, aborted)
     return report
 
 

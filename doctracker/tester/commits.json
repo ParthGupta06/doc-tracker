@@ -9,6 +9,8 @@
     "c5-docs-only": "807e7bbc587d8a04731a850546e6acdb175a4392",
     "c6-binary": "8adab1b196fab4a522459716d96f2942665b222c",
     "c7-code-and-doc": "cb9fd8c094a53c99aec7203c12bc396f0b9bfac6",
-    "c8-missing-doc": "912b0b88a52b14c5be2accffb5c2aff92c2f59e5"
+    "c8-missing-doc": "912b0b88a52b14c5be2accffb5c2aff92c2f59e5",
+    "c9-incorrect-doc": "fc70873718c6ffdb0b47e3a55d13302d7319aeab",
+    "c10-unreadable-doc": "387b834c133dd7408453ce07ff8a90d38a986d2e"
   }
 }

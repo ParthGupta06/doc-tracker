@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Any
 
 from fastapi import FastAPI, Query, Request
@@ -24,6 +25,8 @@ app = FastAPI(title="Documentation Tracker System", version=__version__,
 store = build_store()
 sessions: dict[str, dict[str, Any]] = {}
 sessions_lock = threading.Lock()
+active_session: str | None = None
+SESSION_TTL = 720.0
 
 TEST_PATHS = ("/test/setup", "/test/report")
 
@@ -59,6 +62,10 @@ def describe(exc: RequestValidationError) -> str:
 
 @app.exception_handler(RequestValidationError)
 async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return coverage_tracker.call(active_session or '', validation_response, request, exc)
+
+
+def validation_response(request: Request, exc: RequestValidationError) -> JSONResponse:
     message = describe(exc)
     log.info("request rejected", extra={"path": request.url.path, "reason": message})
     if request.url.path.endswith(TEST_PATHS):
@@ -69,12 +76,16 @@ async def validation_handler(request: Request, exc: RequestValidationError) -> J
 @app.get("/health", tags=["operations"])
 def health() -> dict[str, Any]:
     return {"status": "ok", "tool_version": __version__, "config_version": load_config().config_version,
-            "storage": store.backend}
+            "storage": store.backend, "features": ["prose_detector"]}
 
 
 @app.post("/analyze", response_model=AnalysisResult, tags=["project"],
           responses={400: {"model": ErrorBody}, 404: {"model": ErrorBody}, 500: {"model": ErrorBody}})
 def analyze(req: AnalysisRequest) -> Any:
+    return coverage_tracker.call(active_session or '', analyze_request, req)
+
+
+def analyze_request(req: AnalysisRequest) -> Any:
     try:
         return run_analysis(req, store)
     except RepositoryNotFound:
@@ -95,6 +106,10 @@ def analyze(req: AnalysisRequest) -> Any:
 @app.get("/analysis/{analysis_id}", response_model=AnalysisResult, tags=["project"],
          responses={404: {"model": ErrorBody}, 500: {"model": ErrorBody}})
 def get_analysis(analysis_id: str) -> Any:
+    return coverage_tracker.call(active_session or '', retrieve_request, analysis_id)
+
+
+def retrieve_request(analysis_id: str) -> Any:
     if not ANALYSIS_ID.match(analysis_id):
         return project_error(404, "ANALYSIS_NOT_FOUND", f"analysis {analysis_id} does not exist")
     try:
@@ -104,21 +119,36 @@ def get_analysis(analysis_id: str) -> Any:
         return project_error(500, "STORAGE_FAILED", "saved analysis could not be retrieved")
     if result is None:
         return project_error(404, "ANALYSIS_NOT_FOUND", f"analysis {analysis_id} does not exist")
-    return result
+    return JSONResponse(content=result)
 
 
 @app.post("/test/setup", status_code=201, tags=["testing"])
 def test_setup(req: TestSetupRequest) -> Any:
+    global active_session
     with sessions_lock:
         if req.session_id in sessions:
             return test_error(409, f"session {req.session_id} already exists")
+        previous = sessions.get(active_session) if active_session else None
+        if previous and not previous["report_read"] and time.monotonic() - previous["started"] < SESSION_TTL:
+            return test_error(409, "another test session is active")
         try:
             tracker = coverage_tracker.start()
-            tracker.begin(req.session_id)
+            if previous and active_session:
+                previous["frozen"] = tracker.report(active_session)
+            sessions[req.session_id] = {"setup": req.setup, "started": time.monotonic(),
+                                        "report_read": False, "state": "preparing", "frozen": None}
+            active_session = req.session_id
         except Exception:
-            log.exception("session setup failed")
             return test_error(500, "could not initialize coverage measurement for the session")
-        sessions[req.session_id] = {"setup": req.setup}
+    try:
+        tracker.begin(req.session_id)
+    except Exception:
+        with sessions_lock:
+            sessions[req.session_id]["state"] = "failed"
+            sessions[req.session_id]["report_read"] = True
+        return test_error(500, "could not initialize coverage measurement for the session")
+    with sessions_lock:
+        sessions[req.session_id]["state"] = "ready"
     log.info("test session ready", extra={"session_id": req.session_id})
     return {"session_id": req.session_id}
 
@@ -127,6 +157,17 @@ def test_setup(req: TestSetupRequest) -> Any:
 def test_report(session_id: str | None = Query(default=None)) -> Any:
     if not session_id:
         return test_error(400, "session_id query parameter is required")
-    if session_id not in sessions:
-        return test_error(404, f"session {session_id} is unknown")
-    return {"session_id": session_id, "coverage": {"code": coverage_tracker.start().report(session_id)}}
+    with sessions_lock:
+        session = sessions.get(session_id)
+        if session is None:
+            return test_error(404, f"session {session_id} is unknown")
+        if session["state"] == "preparing":
+            return test_error(409, "session preparation is in progress")
+        if session["state"] == "failed":
+            return test_error(500, "session preparation failed")
+        try:
+            code = session["frozen"] if session["frozen"] is not None else coverage_tracker.start().report(session_id)
+        except Exception:
+            return test_error(500, "coverage could not be read")
+        session["report_read"] = True
+        return {"session_id": session_id, "coverage": {"code": code}}
