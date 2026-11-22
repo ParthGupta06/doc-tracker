@@ -1,0 +1,15 @@
+flowchart LR
+  Client["Grader, podmate or CI"] -->|/system| C1["C1 Interface and validation<br/>system/app.py, models.py"]
+  C1 --> C2["C2 Read-only fetch and resolve<br/>gitops.py (bare partial clone)"]
+  C2 --> C3["C3 Diff and classify<br/>analysis.py, classify.py"]
+  Rules[("mapping-v1.1.yaml")] --> C3
+  Rules --> C4
+  C3 --> C4["C4 Prose detector<br/>detect.py (Layer 1 + Python AST Layer 2)"]
+  C2 -->|"blobs read by object id, at most 1 MB"| C4
+  C4 --> C5["C5 Result builder and write-once store<br/>analysis.py, storage.py"]
+  C5 --> Store[("LocalStore (deployed)<br/>GitHubStore (configured by env)")]
+  C1 --> C6["C6 Retrieval"]
+  C6 --> Store
+  Tester["Tester /tester<br/>tester/app.py, suite.py"] -->|"project calls, any target_url"| C1
+  Tester -->|"session setup and coverage"| Cov["Session coverage<br/>coverage_tracker.py"]
+  C1 --> Logs["Structured JSON logs (stdout)"]

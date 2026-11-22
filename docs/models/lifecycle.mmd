@@ -1,0 +1,19 @@
+stateDiagram-v2
+  [*] --> Validate
+  Validate --> Rejected400: invalid body or field
+  Validate --> Resolve: valid request
+  Resolve --> NotFound404: repository or commit missing
+  Resolve --> Failed500: git failure or 60 s timeout
+  Resolve --> DiffClassify: head and base resolved
+  DiffClassify --> ErrorResult: more than 2000 changed files
+  DiffClassify --> Detect: within limit
+  Detect --> ErrorResult: mapped document has unsupported type
+  Detect --> SuccessResult: every mapped check completed
+  ErrorResult --> Persist
+  SuccessResult --> Persist
+  Persist --> Saved200: written once (O_EXCL)
+  Persist --> Failed500: STORAGE_FAILED
+  Rejected400 --> [*]
+  NotFound404 --> [*]
+  Failed500 --> [*]
+  Saved200 --> [*]

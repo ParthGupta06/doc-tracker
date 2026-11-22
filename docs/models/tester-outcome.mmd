@@ -1,0 +1,16 @@
+flowchart TD
+  Start["Next test T-01 to T-33"] --> Limit{"570 s run limit reached?"}
+  Limit -->|yes| SkipLimit["skip: tester run limit reached"]
+  Limit -->|no| Needs{"Needs a feature?"}
+  Needs -->|no| Run["Send project calls, compare with golden-outputs.json"]
+  Needs -->|yes| Health{"GET /health answered at start?"}
+  Health -->|no| ErrHealth["error, source communication or system"]
+  Health -->|yes| Has{"Target lists the feature?"}
+  Has -->|yes| Run2["Send calls, compare with golden or model-golden answers"]
+  Has -->|no| Fallback{"T-21 and target lists model_drift?"}
+  Fallback -->|yes| L2["Model version: /analyze at L2 twice"]
+  Fallback -->|no| SkipFeat["skip: target does not implement the feature"]
+  Run --> Outcome["pass, fail, or error (system / communication)"]
+  Run2 --> Outcome
+  L2 --> Outcome
+  Outcome --> Cover["Components count when the target answered;<br/>criteria count only on pass or fail"]

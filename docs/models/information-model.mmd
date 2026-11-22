@@ -1,0 +1,40 @@
+classDiagram
+  class AnalysisResult {
+    analysis_id: an-32hex
+    repository: owner/name
+    head_commit: sha40
+    base_commit: sha40 or null
+    config_version: mapping-v1.1
+    tool_version: 0.5.0
+    status: SUCCESS or ERROR
+    unmapped: list of paths
+    created_at: ISO 8601 UTC
+  }
+  class Change {
+    path: string
+    old_path: string or null
+    change_type: ADDED MODIFIED DELETED RENAMED COPIED TYPE_CHANGED
+    category: 7 categories
+  }
+  class Skipped {
+    path: string
+    reason: UNSUPPORTED_FILE_TYPE
+  }
+  class Finding {
+    finding_id: fnd-16hex
+    issue_type: 7 types
+    code_file: string
+    documentation_file: string
+    change_category: IMPLEMENTATION
+    fact: string or null
+    explanation: string
+    verification_status: PENDING_REVIEW
+  }
+  class ErrorBody {
+    code: string
+    message: string
+  }
+  AnalysisResult "1" *-- "0..*" Change : changes
+  AnalysisResult "1" *-- "0..*" Skipped : skipped
+  AnalysisResult "1" *-- "0..*" Finding : issues
+  AnalysisResult "1" *-- "0..1" ErrorBody : error
