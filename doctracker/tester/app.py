@@ -104,9 +104,12 @@ async def setup(body: SetupBody) -> Any:
     return {"session_id": session_id}
 
 
-def coverage_block(executed: list[Any], code: dict[str, Any] | None) -> dict[str, Any]:
+def coverage_block(executed: list[Any], code: dict[str, Any] | None,
+                   judged: list[Any] | None = None) -> dict[str, Any]:
+    """Contract v2.5.0 section 5: components from tests the target answered (pass, fail or a
+    system error); criteria only from tests that ended pass or fail."""
     comps = sorted({c for t in executed for c in t.components})
-    acs = sorted({a for t in executed for a in t.criteria})
+    acs = sorted({a for t in (executed if judged is None else judged) for a in t.criteria})
     return {
         "code": code or {"covered": None, "total": None,
                          "basis": "Source lines; target instrumentation unavailable"},
@@ -114,8 +117,8 @@ def coverage_block(executed: list[Any], code: dict[str, Any] | None) -> dict[str
                       "basis": "Components C1-C7 listed in the pod specification exercised by at least one "
                                "executed test: " + (", ".join(comps) or "none")},
         "system": {"covered": len(acs), "total": len(ACCEPTANCE_CRITERIA),
-                   "basis": "Acceptance criteria AC-01 to AC-10 in the pod specification exercised by at least "
-                            "one executed test: " + (", ".join(acs) or "none")},
+                   "basis": "Acceptance criteria AC-01 to AC-10 (pod-contract.md v2.5.0 section 5), each counted "
+                            "once, from tests that ended pass or fail: " + (", ".join(acs) or "none")},
     }
 
 
@@ -173,6 +176,7 @@ async def run(body: RunBody) -> Any:
     target = session["target_url"]
     results: list[dict[str, Any]] = []
     covered: list[Any] = []
+    judged: list[Any] = []
     current: str | None = None
     aborted: str | None = None
     async with httpx.AsyncClient(timeout=CALL_TIMEOUT) as client:
@@ -192,14 +196,18 @@ async def run(body: RunBody) -> Any:
                                     'message': 'target features unknown because /health failed'})
                     current = None
                     continue
+                fn = case.fn
                 if case.feature and case.feature not in (features or set()):
-                    results.append({'test_id': current, 'outcome': 'skip',
-                                    'message': f'target does not implement {case.feature}'})
-                    current = None
-                    continue
+                    if case.fallback and case.fallback[0] in (features or set()):
+                        fn = case.fallback[1]
+                    else:
+                        results.append({'test_id': current, 'outcome': 'skip',
+                                        'message': f'target does not implement {case.feature}'})
+                        current = None
+                        continue
                 ctx.answered = False
                 try:
-                    message = await case.fn(ctx)
+                    message = await fn(ctx)
                     result = {'test_id': current, 'outcome': 'pass', 'message': message}
                 except Fail as exc:
                     result = {'test_id': current, 'outcome': 'fail', 'message': str(exc)}
@@ -211,6 +219,8 @@ async def run(body: RunBody) -> Any:
                 results.append(result)
                 if ctx.answered and (result['outcome'] in ('pass', 'fail') or result.get('source') == 'system'):
                     covered.append(case)
+                if result['outcome'] in ('pass', 'fail'):
+                    judged.append(case)
                 current = None
         try:
             await asyncio.wait_for(execute(), timeout=RUN_LIMIT)
@@ -230,7 +240,7 @@ async def run(body: RunBody) -> Any:
                     results.append(r)
         code = await fetch_code_coverage(client, target, body.session_id)
     report = {'session_id': body.session_id, 'target_url': target, 'results': results,
-              'coverage': coverage_block(covered, code)}
+              'coverage': coverage_block(covered, code, judged)}
     session['report'] = report
     session['state'] = 'aborted' if aborted else 'done'
     if aborted:

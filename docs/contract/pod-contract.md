@@ -1,6 +1,6 @@
 # Pod 15/16 contract: testing rules
 
-Version 2.4.0, proposed 2026-10-31 and pending Team 16's agreement (section 10); no earlier version was agreed. Both teams' registry rows link this file as the intra-pod
+Version 2.5.0, proposed 2026-11-22 and agreed by Team 16 (recorded 2026-11-22, section 10). Both teams' registry rows link this file as the intra-pod
 specification. The course's `docs/base/student-facing-spec.docx.pdf` wins over every
 file here.
 
@@ -19,7 +19,7 @@ compared. Compare everything else as section 3 says.
 | `pod-tester.openapi.yml` | the tester API and suite report, as fixed by the course |
 | `mapping-v1.1.yaml` | shared classification rules, skip allowlist and code-to-doc mappings, loaded at runtime |
 | `golden-outputs.json` | expected answers for the 10 cases on Team 16's fixture |
-| `model-golden-outputs.json` | expected answers for T-24 to T-33 (pending, see section 3) |
+| `model-golden-outputs.json` | expected answers for T-21 (model version) and T-22 to T-33 (section 3) |
 
 `spec-v1.1.md` (the package's `SPEC.md`), `mapping-v1.1.yaml` and `golden-outputs.json`
 are byte-identical copies from Team 16's v1.1 package (proposed 2026-10-30). "v1.1 SPEC"
@@ -37,8 +37,10 @@ one-session rule. Team 16's tester needs seven changes:
 - It accepts `drift` and `drift_error` in an `AnalysisResult`.
 - It runs T-24 to T-33 against `model-golden-outputs.json` as each group is published
   (sections 3 and 4).
-- It reports T-22 and T-23 as `skip` with the messages in section 4.
-- It counts coverage only from tests the target answered (section 5).
+- It runs T-22 and T-23, and T-21's model version, against `model-golden-outputs.json`
+  on a system that lists `model_drift` (section 4).
+- It counts a component only from tests the target answered, and a criterion only
+  from tests that ended `pass` or `fail` (section 5).
 - It keeps to section 6's limits: 110 s for system setup, 15 s for the system's
   `GET /test/report`, and a stop at 570 s of the 600 s run.
 
@@ -99,7 +101,7 @@ also after the system restarts or is redeployed.
 | Repository | Built by | Used by | Expected answers |
 | --- | --- | --- | --- |
 | `ParthGupta06/doc-tracker-fixtures` (c0 to c8) | Team 16 | T-01 to T-21 | `golden-outputs.json` |
-| `MuhammadSban/doc-tracker-model-fixtures` | Team 15 | T-24 to T-33 | `model-golden-outputs.json` (pending) |
+| `kaan-kanadasi/doc-tracker-model-fixtures` | Team 15 | T-21 (model version), T-22 to T-33 | `model-golden-outputs.json` |
 
 **Comparing with `golden-outputs.json`** (as v1.1 SPEC section 9): these fields must be
 equal: `head_commit`, `base_commit`, `config_version`, `status`, `error`, `changes`,
@@ -119,41 +121,43 @@ Commits of the model fixture, oldest first:
 
 | Tag | What the commit does | SHA |
 | --- | --- | --- |
-| L-pre | Python code, no `/models` yet | pending |
-| L0 | `/models` committed as `drifter init` writes it | pending |
-| L1 | comments and whitespace only | pending |
-| L2 | adds one function | pending |
-| L3 | removes one import | pending |
-| L4 | adds a state and a transition into it | pending |
-| L5 | L2's kind of change plus updated `/models` in the same commit | pending |
-| L6 | a non-owner edits an owned path | pending |
-| L7 | a hand edit removes an `inherits` edge from `structural.json` that the code still makes | pending |
+| L-pre | Python code, no `/models` yet | `871c9b156d87040346ef667ace936bf72a6a9c1e` |
+| L0 | `/models` committed as `drifter init` writes it | `9f79b3abadd445010e876177ed42745079397d47` |
+| L1 | comments and whitespace only | `d243a81f82e8294cdba081c76c9daa7916ee3d3b` |
+| L2 | adds one function | `081f2584d21b20ef7a0b2ee36779e69ee5ff9572` |
+| L3 | removes one import | `96d3ef3abc09e659690da6bfea8e62caa9ef1127` |
+| L4 | adds a state and a transition into it | `a36f31280175bc96905f98dc69b820c28ce659e7` |
+| L5 | L2's kind of change plus updated `/models` in the same commit | `4cb24a9407deb003fc19605e51ede8ea0f7b072c` |
+| L6 | a non-owner edits an owned path | `ecd599e93719c3aed79bbf197b66366f2829e869` |
+| L7 | a hand edit removes an `inherits` edge from `structural.json` that the code still makes | `d288268468df65602e9f4b348a95ff561ddd67bd` |
+| L8 | the owner adds three files whose code would hang, raise or write a file if it were imported or run, plus updated `/models` in the same commit | `c8058c2e8a52b5b1e86710e0821b94437fc438e1` |
 
-**Publishing the expected answers** (Team 15). The drift tests are published in two groups, each once the
+**Publishing the expected answers** (Team 15). The tests on the model fixture are published in three groups, each once the
 commits its tests use are fixed for good:
 
 | Group | Tests | Commits used | Can be fixed when |
 | --- | --- | --- | --- |
 | 1 | T-32 | L-pre, which has no `/models` | the repository exists |
 | 2 | T-24 to T-31, T-33 | L0 to L7, which commit all four model files | Team 15's specification settles the behavioral format and the scope rules (its open question Q11); the structural format is settled |
+| 3 | T-21 (model version), T-22, T-23 | L2, L5, L6 and L8 | L8 is pushed to the fixture repository |
 
 For each group:
 
-- [ ] Fill the SHAs of the commits its tests use in the table above.
-- [ ] Add its tests' expected answers to `model-golden-outputs.json`.
-- [ ] Remove "pending" from its tests in section 4.
-- [ ] Bump the version (section 10).
+- [x] Fill the SHAs of the commits its tests use in the table above.
+- [x] Add its tests' expected answers to `model-golden-outputs.json`.
+- [x] Remove "pending" from its tests in section 4.
+- [x] Bump the version (section 10).
+
+Group 3 is published within version 2.5.0, with no further bump, as section 10 states.
 
 ## 4. Test list
 
 Both testers run every test, T-01 to T-33, so each tester checks both systems' detectors.
-T-24 to T-33 are **pending** until their group is published (section 3); a pending test
-is reported as `skip` with the message "expected answers not yet published".
 
 The tester reads `GET /health` once before the first test. If it gives no 200 `Health`
 body within 90 s, the target's features are unknown: each test that needs a feature
-(T-18 to T-21, T-24 to T-33) is `error`, with source `communication` when nothing
-answered and `system` otherwise; a pending test stays `skip`, and the other tests run as
+(T-18 to T-33) is `error`, with source `communication` when nothing
+answered and `system` otherwise, and the other tests run as
 usual. The last two columns say what a test does on a system without `prose_detector` or
 without `model_drift` (section 1, Features). No test is expected to fail on either team's system.
 
@@ -182,23 +186,45 @@ T-01 to T-23 they are the lists Team 16's tester already uses.
 | T-18 | Missing mapped documentation finding | c8: `MISSING_DOCUMENTATION` | C4 | AC-02 | skip | runs |
 | T-19 | Unchanged mapped documentation finding | c1: `OUTDATED_DOCUMENTATION`, `UNDOCUMENTED_SYMBOL` | C4 | AC-02 | skip | runs |
 | T-20 | Code and documentation updated together | c7: `issues: []` | C4 | AC-03 | skip | runs |
-| T-21 | New findings start PENDING_REVIEW | the findings of T-18 and T-19 | C4 C5 | AC-04 | skip | runs |
-| T-22 | Authorized and unauthorized review decisions | Phase 5 | C7 | AC-05 | skip | skip |
-| T-23 | Read-only analysis, no repository code execution | inspection | C2 | AC-09 | skip | skip |
-| T-24 | `/analyze` at L0: `aligned: true`, three empty lists (pending) | model fixture | C1 C2 C3 C4 C5 | AC-03 | runs | skip |
-| T-25 | `/analyze` at L1: `aligned: true` (pending) | model fixture | C1 C2 C3 C4 C5 | AC-03 | runs | skip |
-| T-26 | `/analyze` at L2: one structural `ADDED` (pending) | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
-| T-27 | `/analyze` at L3: one structural `REMOVED` (pending) | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
-| T-28 | `/analyze` at L4: behavioral `ADDED` state and transition (pending) | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
-| T-29 | `/analyze` at L5: `aligned: true` (pending) | model fixture | C1 C2 C3 C4 C5 | AC-03 | runs | skip |
-| T-30 | `/analyze` at L6: one ownership `VIOLATION` (pending) | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
-| T-31 | `/analyze` at L7: one structural `ADDED` (pending) | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
-| T-32 | `/analyze` at L-pre: `drift: null`, `drift_error.code` `MODELS_NOT_FOUND` (pending) | model fixture | C1 C2 C3 C4 C5 | AC-08 | runs | skip |
-| T-33 | `/generate` at L0: `structural.json`, `behavioral.json` and `scope.json` byte-equal to the committed `/models` (pending) | model fixture | C1 C2 C4 | AC-10 | runs | skip |
+| T-21 | New findings start PENDING_REVIEW | the findings of T-18 and T-19; model version: L2, twice | C4 C5 | AC-04 | runs the model version with `model_drift`, skip otherwise | runs |
+| T-22 | Authorized and unauthorized review decisions | model fixture: L5 and L6 | C7 | AC-05 | runs | skip |
+| T-23 | Read-only analysis, no repository code execution | model fixture: L8 | C2 | AC-09 | runs | skip |
+| T-24 | `/analyze` at L0: `aligned: true`, three empty lists | model fixture | C1 C2 C3 C4 C5 | AC-03 | runs | skip |
+| T-25 | `/analyze` at L1: `aligned: true` | model fixture | C1 C2 C3 C4 C5 | AC-03 | runs | skip |
+| T-26 | `/analyze` at L2: one structural `ADDED` | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
+| T-27 | `/analyze` at L3: one structural `REMOVED` | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
+| T-28 | `/analyze` at L4: behavioral `ADDED` state and transition | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
+| T-29 | `/analyze` at L5: `aligned: true` | model fixture | C1 C2 C3 C4 C5 | AC-03 | runs | skip |
+| T-30 | `/analyze` at L6: one ownership `VIOLATION` | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
+| T-31 | `/analyze` at L7: one structural `ADDED` | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
+| T-32 | `/analyze` at L-pre: `drift: null`, `drift_error.code` `MODELS_NOT_FOUND` | model fixture | C1 C2 C3 C4 C5 | AC-08 | runs | skip |
+| T-33 | `/generate` at L0: `structural.json`, `behavioral.json` and `scope.json` byte-equal to the committed `/models` | model fixture | C1 C2 C4 | AC-10 | runs | skip |
 
 The "skip" cells in the last two columns are deviations 1 and 2: Team 15's system has no
-`prose_detector`, and Team 16's has no `model_drift`. T-22 and T-23 are `skip` on every
-system, with the messages "Phase 5" and "checked by inspection".
+`prose_detector`, and Team 16's has no `model_drift`. T-22 and T-23 need `model_drift`,
+and T-21 runs on either feature.
+
+Rules for T-21, T-22 and T-23:
+
+- **T-21.** On a system that lists `prose_detector`, also when it lists both features,
+  T-21 runs its prose version: every finding of c8 and c1 starts `PENDING_REVIEW`. On a
+  system that lists `model_drift` and not `prose_detector`, it runs its model version:
+  `POST /analyze` for L2 twice, and each answer must equal L2's expected answer, as
+  T-26 compares it. On a system that lists neither feature it is `skip` with the
+  message "target does not implement prose_detector".
+- **T-22.** It needs `model_drift`. L5 must come back aligned (the authorized change: an
+  owner changes code and updates `/models` in the same commit), and L6 with its one
+  ownership violation (the unauthorized change: a non-owner edits an owned path). Each
+  answer is compared as T-24 to T-31 compare. Without `model_drift` it is `skip` with
+  the message "target does not implement model_drift".
+- **T-23.** It needs `model_drift`. L8 must equal its expected answer (`aligned: true`,
+  three empty lists, `drift_error: null`), compared as T-24 to T-31 compare. In L8 the
+  owner adds `src/hangs.py` (its top level loops forever), `src/raises.py` (it raises at
+  import) and `src/writes.py` (it writes a file beside itself), and updates `/models` in
+  the same commit, so the code would hang, fail or write a file if it were imported or
+  run. Without `model_drift` it is `skip` with the message "target does not implement
+  model_drift", until Team 16 publishes a case of their own. T-23 does not check the
+  "no credentials in logs" part of AC-09.
 
 Rules for T-24 to T-33:
 
@@ -236,12 +262,34 @@ Both testers use the same lists, so totals match.
 | AC-09 | Repository unchanged, no code executed, no credentials in logs | inspection, Phase 5 |
 | AC-10 | Five runs of c4 and of c1 give identical significant fields, including identical finding_ids | c4, c1 |
 
-- **What counts:** a component or criterion is covered when at least one test that sent
+- **What counts, components:** a component is covered when at least one test that sent
   its project calls and got an answer from the target lists it in section 4: outcome
-  `pass` or `fail`, or `error` with source `system`. A test covers nothing when it is
-  `skip`, `error` because `/health` failed (section 4), or `error` with any other source.
+  `pass` or `fail`, or `error` with source `system`.
+- **What counts, criteria:** a criterion is covered only when at least one test that
+  lists it in section 4 ended `pass` or `fail`. An `error` with source `system` covers
+  its components but not its criteria.
+- **Why they differ:** a component that answered, even with a 5xx, was exercised, but a
+  criterion is checked only when its test's answer could be judged.
+- Each component and criterion counts once, however many tests list it. A test covers
+  nothing when it is `skip`, `error` because `/health` failed (section 4), or `error`
+  with any source other than `system`.
+- **Criteria in scope for system coverage:** AC-01 to AC-10, AC-05 and AC-09 included,
+  so the system `total` is 10 on every system, also while their tests skip.
 - **Code coverage** comes from the system's `GET /test/report`; `null` counts with a
   basis when unavailable, never 0.
+- **Model coverage, same team only.** A report carries `coverage.model` only when its
+  target is a tester's own system. After normalising `target_url` (scheme and host in
+  lowercase, a default port dropped, a trailing slash stripped, the path compared
+  exactly), that is the team's deployed public URL with the path `/system` (for Team 15,
+  its Railway public domain), the system URL in the team's registry row, or `localhost`,
+  `127.0.0.1` or `::1` on any port with the path `/system`, only while the tester is not
+  running on its deployed host (for Team 15, not on Railway). A cross-team report never
+  carries it.
+- **`target_url`.** Every system base URL that is a valid `format: uri`, starts with
+  `http://` or `https://` in lowercase, has a non-empty host and contains no `?`, `#`
+  or `@` also matches the tester's `target_url` pattern (`pod-tester.openapi.yml`). The
+  pattern also accepts some strings that are not URIs, such as `http://a%zz/system`, so a
+  tester does not use it to validate a URI.
 
 ## 6. Limits and retries
 
@@ -289,14 +337,14 @@ cannot run again (409).
 ## 8. Registry and access
 
 Both teams' "Intra-pod specification URL" links this file:
-<https://github.com/MuhammadSban/DocumentationModelDrifter/blob/contract-2.4.0/docs/contract/pod-contract.md>.
+<https://github.com/MuhammadSban/DocumentationModelDrifter/blob/contract-2.5.0/docs/contract/pod-contract.md>.
 Team 15's "Access / run notes" cell:
 
 > No authentication; public GitHub repositories only. Limits: tester setup 120 s, tester
 > run 600 s, system setup 90 s, 90 s per project call. One session at a time: a new
 > system setup answers 409 until the last session's /test/report is read, or for 720 s
 > after its setup. Spec:
-> https://github.com/MuhammadSban/DocumentationModelDrifter/blob/contract-2.4.0/docs/contract/pod-contract.md
+> https://github.com/MuhammadSban/DocumentationModelDrifter/blob/contract-2.5.0/docs/contract/pod-contract.md
 
 ## 9. Differences from Team 16's v1.1 package, in one place
 
@@ -315,8 +363,12 @@ Team 15's "Access / run notes" cell:
 
 ## 10. Agreement and changes
 
-Version 2.4.0 is proposed and pending Team 16's agreement; Team 16 has agreed to no
-version yet. Every later change to any file in this folder
+Version 2.5.0 is agreed by both teams (recorded 2026-11-22). Team 16's agreement covers
+the coverage rules of section 5 and the rules that make T-21, T-22 and T-23 run instead
+of skip. Section 4 holds all three rules, and their expected answers are group 3 of
+section 3, published within this same version.
+The version before it was the first one both teams agreed to; Team 16's agreement to it
+was recorded on 2026-11-05. Every later change to any file in this folder
 bumps the version and applies once
 both teams agree to it. `spec-v1.1.md`, `mapping-v1.1.yaml` and `golden-outputs.json`
 change only when Team 16 publishes a new version of them.

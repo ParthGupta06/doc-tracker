@@ -3,7 +3,7 @@
 openapi: 3.1.1
 info:
   title: Documentation Tracker System (Pod 15/16)
-  version: 2.4.0
+  version: 2.5.0
   description: >
     Project API and course testing endpoints of the Documentation Tracker pod.
     Paths are relative to a team's registered system base URL. Testing rules

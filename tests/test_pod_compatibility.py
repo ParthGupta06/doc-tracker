@@ -1,6 +1,7 @@
-"""Protocol regressions for the proposed contract 2.4.0."""
+"""Protocol regressions for pod contract 2.5.0."""
 import asyncio
 import copy
+import json
 
 import httpx
 import pytest
@@ -9,7 +10,7 @@ from fastapi.testclient import TestClient
 from doctracker.main import app
 from doctracker.system import app as system
 from doctracker.tester import app as tester
-from doctracker.tester.suite import GOLDEN, Fail, check_schema
+from doctracker.tester.suite import GOLDEN, MODEL_CASES, MODEL_GOLDEN, Fail, check_schema
 from doctracker.tester.suite import TestCase as Case
 
 client = TestClient(app)
@@ -88,25 +89,96 @@ def base_reply(request):
     return httpx.Response(200, json={})
 
 
-@pytest.mark.parametrize('features', [[], ['model_drift']])
-def test_missing_feature_skips_and_pending_stays_pending(monkeypatch, features):
-    health_calls = []
+def test_prose_only_target_skips_every_model_test(monkeypatch):
     def handler(req):
         if req.url.path.endswith('/health'):
-            health_calls.append(req)
             return httpx.Response(200, json={'status': 'ok', 'tool_version': 'x', 'config_version': 'mapping-v1.1',
-                                            'features': features})
+                                            'features': []})
         return base_reply(req)
     _, report = run_mock(monkeypatch, handler)
-    assert len(health_calls) == 1 and len(report['results']) == 33
+    assert len(report['results']) == 33
     results = {r['test_id']: r for r in report['results']}
     for i in range(18, 22):
+        assert results[f'T-{i}'] == {'test_id': f'T-{i}', 'outcome': 'skip',
+                                     'message': 'target does not implement prose_detector'}
+    for i in range(22, 34):
+        assert results[f'T-{i}'] == {'test_id': f'T-{i}', 'outcome': 'skip',
+                                     'message': 'target does not implement model_drift'}
+
+
+def commit_of(req):
+    try:
+        return json.loads(req.content).get('commit_id')
+    except (ValueError, AttributeError):
+        return None
+
+
+def model_system(mutate=None):
+    """A fake Team 15 system that answers each model fixture commit with its published answer."""
+    by_commit = {c['request']['commit_id']: c for c in MODEL_GOLDEN['cases'] if c['case'] != 'L0-generate'}
+    calls = []
+    def handler(req):
+        path = req.url.path
+        if path.endswith('/health'):
+            return httpx.Response(200, json={'status': 'ok', 'tool_version': 'x', 'config_version': 'mapping-v1.1',
+                                            'features': ['model_drift']})
+        if path.endswith('/generate'):
+            files = dict(MODEL_CASES['L0-generate']['expected']['files'], **{'ownership.json': '{}'})
+            return httpx.Response(200, json={'repository': 'r', 'head_commit': 'h', 'tool_version': 'x',
+                                             'files': files})
+        if path.endswith('/analyze'):
+            commit = commit_of(req)
+            case = by_commit.get(commit)
+            if case is None:
+                return httpx.Response(200, json={})
+            calls.append(case['case'])
+            want = case['expected']
+            error = None if want['drift_error'] is None else dict(want['drift_error'], message='m')
+            body = {'drift': copy.deepcopy(want['drift']), 'drift_error': error}
+            if mutate:
+                mutate(case['case'], body)
+            return httpx.Response(200, json=body)
+        return base_reply(req)
+    return handler, calls
+
+
+def test_model_target_runs_t21_to_t33_against_published_answers(monkeypatch):
+    handler, calls = model_system()
+    _, report = run_mock(monkeypatch, handler)
+    results = {r['test_id']: r for r in report['results']}
+    for i in range(18, 21):
         assert results[f'T-{i}']['outcome'] == 'skip'
-        assert results[f'T-{i}']['message'] == 'target does not implement prose_detector'
-    for i in range(24, 34):
-        assert results[f'T-{i}']['message'] == 'expected answers not yet published'
-    assert results['T-22']['message'] == 'Phase 5'
-    assert results['T-23']['message'] == 'checked by inspection'
+    for i in range(21, 34):
+        assert results[f'T-{i}']['outcome'] == 'pass', results[f'T-{i}']
+    assert calls.count('L2') == 3 and 'L8' in calls and calls.count('L5') == 2
+    assert report['coverage']['component']['covered'] == 7  # C7 from T-22
+    acs = report['coverage']['system']['basis']
+    assert 'AC-05' in acs and 'AC-09' in acs
+
+
+def test_model_drift_mismatch_fails(monkeypatch):
+    def mutate(case, body):
+        if case == 'L6':
+            body['drift']['ownership'] = []
+    handler, _ = model_system(mutate)
+    _, report = run_mock(monkeypatch, handler)
+    results = {r['test_id']: r for r in report['results']}
+    assert results['T-22']['outcome'] == 'fail' and 'L6' in results['T-22']['message']
+    assert results['T-30']['outcome'] == 'fail'
+
+
+def test_system_error_covers_component_but_not_criterion(monkeypatch):
+    handler, _ = model_system()
+    l8 = MODEL_CASES['L8']['request']['commit_id']
+    def broken(req):
+        if req.url.path.endswith('/analyze') and commit_of(req) == l8:
+            return httpx.Response(503, json={})
+        return handler(req)
+    monkeypatch.setattr(tester, 'TESTS', [t for t in tester.TESTS if t.test_id == 'T-23'])
+    _, report = run_mock(monkeypatch, broken)
+    assert report['results'][0]['outcome'] == 'error' and report['results'][0]['source'] == 'system'
+    assert report['coverage']['component']['covered'] == 1
+    assert report['coverage']['system']['covered'] == 0
 
 
 @pytest.mark.parametrize('health_mode,source', [('timeout','communication'), ('invalid','system')])

@@ -1,7 +1,8 @@
 """Team 16 test suite for the pod's Documentation Tracker project API.
 
-Every planned test appears exactly once. Tests for acceptance criteria
-scheduled for later phases are reported as `skip` with the reason.
+Every test of pod-contract.md v2.5.0 section 4 (T-01 to T-33) appears exactly once.
+T-18 to T-21 need `prose_detector`; T-22 to T-33 and T-21's model version need
+`model_drift` and are checked against model-golden-outputs.json.
 """
 
 from __future__ import annotations
@@ -33,6 +34,9 @@ ACCEPTANCE_CRITERIA = [f"AC-{i:02d}" for i in range(1, 11)]
 
 SIGNIFICANT = ("head_commit", "base_commit", "config_version", "status", "error", "changes", "skipped", "unmapped")
 GOLDEN = {c['case']: c for c in json.loads((ROOT / 'docs/contract/golden-outputs.json').read_text())['cases']}
+MODEL_GOLDEN = json.loads((ROOT / 'docs/contract/model-golden-outputs.json').read_text())
+MODEL_CASES = {c['case']: c for c in MODEL_GOLDEN['cases']}
+MISSING = object()
 
 
 class Fail(Exception):
@@ -257,6 +261,65 @@ async def t21(ctx: Ctx) -> str:
     return 'Both missing and stale cases produce only pending findings.'
 
 
+async def model_post(ctx: Ctx, path: str, case: str) -> dict[str, Any]:
+    resp = await ctx.post(path, MODEL_CASES[case]['request'])
+    if resp.status_code >= 500:
+        raise SystemError_(f"{case}: POST {path} returned HTTP {resp.status_code}: {resp.text[:200]}")
+    if resp.status_code != 200:
+        raise Fail(f"{case}: expected HTTP 200 from POST {path}; received {resp.status_code}: {resp.text[:200]}")
+    body = body_of(resp)
+    if not isinstance(body, dict):
+        raise Fail(f"{case}: POST {path} did not return a JSON object")
+    return body
+
+
+async def drift_case(ctx: Ctx, case: str) -> None:
+    """Contract v2.5.0 section 4: compare the whole drift object; drift_error by code only."""
+    body = await model_post(ctx, '/analyze', case)
+    want = MODEL_CASES[case]['expected']
+    if body.get('drift', MISSING) != want['drift']:
+        raise Fail(f"{case}: drift differs from model-golden-outputs.json")
+    got_error = body.get('drift_error', MISSING)
+    if want['drift_error'] is None:
+        if got_error is not None:
+            raise Fail(f"{case}: drift_error is {'missing' if got_error is MISSING else 'not null'}")
+    elif not isinstance(got_error, dict) or got_error.get('code') != want['drift_error']['code']:
+        raise Fail(f"{case}: drift_error.code differs from model-golden-outputs.json")
+
+
+def drift_test(case: str) -> Callable[[Ctx], Awaitable[str]]:
+    async def check(ctx: Ctx) -> str:
+        await drift_case(ctx, case)
+        return f"{case} matches the expected drift answer."
+    return check
+
+
+async def t21_model(ctx: Ctx) -> str:
+    for _ in range(2):
+        await drift_case(ctx, 'L2')
+    return 'L2 analyzed twice; both answers match the expected drift answer.'
+
+
+async def t22(ctx: Ctx) -> str:
+    await drift_case(ctx, 'L5')
+    await drift_case(ctx, 'L6')
+    return 'Authorized change (L5) is aligned; unauthorized change (L6) is one ownership violation.'
+
+
+async def t23(ctx: Ctx) -> str:
+    await drift_case(ctx, 'L8')
+    return 'L8 trap files (hang, raise, write) analyzed without execution; answer matches.'
+
+
+async def t33(ctx: Ctx) -> str:
+    body = await model_post(ctx, '/generate', 'L0-generate')
+    files = body.get('files')
+    for name, text in MODEL_CASES['L0-generate']['expected']['files'].items():
+        if not isinstance(files, dict) or files.get(name, MISSING) != text:
+            raise Fail(f"L0-generate: {name} differs from the expected text")
+    return 'structural.json, behavioral.json and scope.json match byte for byte.'
+
+
 TestFn = Callable[[Ctx], Awaitable[str]]
 
 
@@ -269,6 +332,7 @@ class TestCase:
     fn: TestFn | None
     skip_reason: str | None = None
     feature: str | None = None
+    fallback: tuple[str, TestFn] | None = None
 
 
 PIPELINE = ("C1", "C2", "C3", "C5")
@@ -294,15 +358,26 @@ TESTS: list[TestCase] = [
     TestCase("T-18", "Missing mapped documentation finding", ("AC-02",), ("C4",), t18, feature="prose_detector"),
     TestCase("T-19", "Unchanged mapped documentation finding", ("AC-02",), ("C4",), t19, feature="prose_detector"),
     TestCase("T-20", "Code and documentation updated together", ("AC-03",), ("C4",), t20, feature="prose_detector"),
-    TestCase("T-21", "New findings start PENDING_REVIEW", ("AC-04",), ("C4", "C5"), t21, feature="prose_detector"),
-    TestCase("T-22", "Authorized and unauthorized review decisions", ("AC-05",), ("C7",), None, "Phase 5"),
-    TestCase("T-23", "Read-only analysis, no repository code execution", ("AC-09",), ("C2",), None, "checked by inspection"),
+    TestCase("T-21", "New findings start PENDING_REVIEW", ("AC-04",), ("C4", "C5"), t21, feature="prose_detector",
+             fallback=("model_drift", t21_model)),
+    TestCase("T-22", "Authorized and unauthorized review decisions", ("AC-05",), ("C7",), t22, feature="model_drift"),
+    TestCase("T-23", "Read-only analysis, no repository code execution", ("AC-09",), ("C2",), t23,
+             feature="model_drift"),
 ]
 
-# v2.4.0 publishes no model fixture/oracles. Never invent results or test requests.
-for number in range(24, 34):
-    TESTS.append(TestCase(f"T-{number}", "Model drift (pending oracle)",
-                         ("AC-08",) if number == 32 else (("AC-10",) if number == 33 else
-                         (("AC-03",) if number in (24, 25, 29) else ("AC-02",))),
-                         ("C1", "C2", "C4") if number == 33 else ("C1", "C2", "C3", "C4", "C5"),
-                         None, "expected answers not yet published", "model_drift"))
+MODEL = ("C1", "C2", "C3", "C4", "C5")
+DRIFT_TESTS = [
+    ("T-24", "/analyze at L0: aligned: true, three empty lists", "AC-03", "L0"),
+    ("T-25", "/analyze at L1: aligned: true", "AC-03", "L1"),
+    ("T-26", "/analyze at L2: one structural ADDED", "AC-02", "L2"),
+    ("T-27", "/analyze at L3: one structural REMOVED", "AC-02", "L3"),
+    ("T-28", "/analyze at L4: behavioral ADDED state and transition", "AC-02", "L4"),
+    ("T-29", "/analyze at L5: aligned: true", "AC-03", "L5"),
+    ("T-30", "/analyze at L6: one ownership VIOLATION", "AC-02", "L6"),
+    ("T-31", "/analyze at L7: one structural ADDED", "AC-02", "L7"),
+    ("T-32", "/analyze at L-pre: drift: null, drift_error.code MODELS_NOT_FOUND", "AC-08", "L-pre"),
+]
+TESTS += [TestCase(t, title, (ac,), MODEL, drift_test(case), feature="model_drift")
+          for t, title, ac, case in DRIFT_TESTS]
+TESTS.append(TestCase("T-33", "/generate at L0: structural.json, behavioral.json and scope.json byte-equal to the "
+                      "committed /models", ("AC-10",), ("C1", "C2", "C4"), t33, feature="model_drift"))

@@ -1,0 +1,220 @@
+{
+  "fixture_repo": "kaan-kanadasi/doc-tracker-model-fixtures",
+  "cases": [
+    {
+      "case": "L-pre",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "871c9b156d87040346ef667ace936bf72a6a9c1e"
+      },
+      "expected": {
+        "drift": null,
+        "drift_error": {
+          "code": "MODELS_NOT_FOUND"
+        }
+      }
+    },
+    {
+      "case": "L0",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "9f79b3abadd445010e876177ed42745079397d47"
+      },
+      "expected": {
+        "drift": {
+          "aligned": true,
+          "behavioral": [],
+          "ownership": [],
+          "structural": []
+        },
+        "drift_error": null
+      }
+    },
+    {
+      "case": "L0-generate",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "9f79b3abadd445010e876177ed42745079397d47"
+      },
+      "expected": {
+        "files": {
+          "behavioral.json": "{\n  \"schema_version\": 1,\n  \"states\": [\n    {\n      \"file\": \"src/orders.py\",\n      \"id\": \"state:[\\\"src/orders.py\\\",\\\"orders:Order\\\",\\\"self.status\\\",\\\"open\\\"]\",\n      \"kind\": \"state\",\n      \"machine\": \"orders:Order\",\n      \"value\": \"open\",\n      \"variable\": \"self.status\"\n    },\n    {\n      \"file\": \"src/orders.py\",\n      \"id\": \"state:[\\\"src/orders.py\\\",\\\"orders:Order\\\",\\\"self.status\\\",\\\"paid\\\"]\",\n      \"kind\": \"state\",\n      \"machine\": \"orders:Order\",\n      \"value\": \"paid\",\n      \"variable\": \"self.status\"\n    }\n  ],\n  \"transitions\": [\n    {\n      \"file\": \"src/orders.py\",\n      \"guard\": \"self.status == 'open'\",\n      \"id\": \"transition:[\\\"src/orders.py\\\",\\\"orders:Order.advance\\\",\\\"state:[\\\\\\\"src/orders.py\\\\\\\",\\\\\\\"orders:Order\\\\\\\",\\\\\\\"self.status\\\\\\\",\\\\\\\"open\\\\\\\"]\\\",\\\"state:[\\\\\\\"src/orders.py\\\\\\\",\\\\\\\"orders:Order\\\\\\\",\\\\\\\"self.status\\\\\\\",\\\\\\\"paid\\\\\\\"]\\\"]\",\n      \"kind\": \"transition\",\n      \"source\": \"state:[\\\"src/orders.py\\\",\\\"orders:Order\\\",\\\"self.status\\\",\\\"open\\\"]\",\n      \"target\": \"state:[\\\"src/orders.py\\\",\\\"orders:Order\\\",\\\"self.status\\\",\\\"paid\\\"]\",\n      \"trigger\": \"orders:Order.advance\"\n    }\n  ]\n}\n",
+          "scope.json": "{\n  \"exclude\": [\n    \"tests/**\"\n  ],\n  \"include\": [\n    \"**/*.py\"\n  ]\n}\n",
+          "structural.json": "{\n  \"edges\": [\n    {\n      \"file\": \"src/orders.py\",\n      \"id\": \"imports:orders->audit\",\n      \"kind\": \"imports\",\n      \"source\": \"orders\",\n      \"target\": \"audit\"\n    },\n    {\n      \"file\": \"src/orders.py\",\n      \"id\": \"imports:orders->store\",\n      \"kind\": \"imports\",\n      \"source\": \"orders\",\n      \"target\": \"store\"\n    },\n    {\n      \"file\": \"src/store.py\",\n      \"id\": \"inherits:store:OrderStore->store:Store\",\n      \"kind\": \"inherits\",\n      \"source\": \"store:OrderStore\",\n      \"target\": \"store:Store\"\n    }\n  ],\n  \"nodes\": [\n    {\n      \"file\": \"src/audit.py\",\n      \"id\": \"audit\",\n      \"kind\": \"module\"\n    },\n    {\n      \"async\": false,\n      \"decorators\": [],\n      \"file\": \"src/audit.py\",\n      \"id\": \"audit:record\",\n      \"kind\": \"function\",\n      \"params\": [\n        \"event\"\n      ]\n    },\n    {\n      \"file\": \"src/orders.py\",\n      \"id\": \"orders\",\n      \"kind\": \"module\"\n    },\n    {\n      \"file\": \"src/orders.py\",\n      \"id\": \"orders:Order\",\n      \"kind\": \"class\"\n    },\n    {\n      \"async\": false,\n      \"decorators\": [],\n      \"file\": \"src/orders.py\",\n      \"id\": \"orders:Order.__init__\",\n      \"kind\": \"method\",\n      \"params\": [\n        \"self\",\n        \"order_id\"\n      ]\n    },\n    {\n      \"async\": false,\n      \"decorators\": [],\n      \"file\": \"src/orders.py\",\n      \"id\": \"orders:Order.advance\",\n      \"kind\": \"method\",\n      \"params\": [\n        \"self\"\n      ]\n    },\n    {\n      \"file\": \"src/store.py\",\n      \"id\": \"store\",\n      \"kind\": \"module\"\n    },\n    {\n      \"file\": \"src/store.py\",\n      \"id\": \"store:OrderStore\",\n      \"kind\": \"class\"\n    },\n    {\n      \"async\": false,\n      \"decorators\": [],\n      \"file\": \"src/store.py\",\n      \"id\": \"store:OrderStore.put\",\n      \"kind\": \"method\",\n      \"params\": [\n        \"self\",\n        \"order\"\n      ]\n    },\n    {\n      \"file\": \"src/store.py\",\n      \"id\": \"store:Store\",\n      \"kind\": \"class\"\n    },\n    {\n      \"async\": false,\n      \"decorators\": [],\n      \"file\": \"src/store.py\",\n      \"id\": \"store:Store.__init__\",\n      \"kind\": \"method\",\n      \"params\": [\n        \"self\"\n      ]\n    },\n    {\n      \"async\": false,\n      \"decorators\": [],\n      \"file\": \"src/store.py\",\n      \"id\": \"store:Store.get\",\n      \"kind\": \"method\",\n      \"params\": [\n        \"self\",\n        \"key\"\n      ]\n    }\n  ],\n  \"schema_version\": 1\n}\n"
+        }
+      }
+    },
+    {
+      "case": "L1",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "d243a81f82e8294cdba081c76c9daa7916ee3d3b"
+      },
+      "expected": {
+        "drift": {
+          "aligned": true,
+          "behavioral": [],
+          "ownership": [],
+          "structural": []
+        },
+        "drift_error": null
+      }
+    },
+    {
+      "case": "L2",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "081f2584d21b20ef7a0b2ee36779e69ee5ff9572"
+      },
+      "expected": {
+        "drift": {
+          "aligned": false,
+          "behavioral": [],
+          "ownership": [],
+          "structural": [
+            {
+              "change": "ADDED",
+              "file": "src/audit.py",
+              "id": "audit:forget",
+              "kind": "function"
+            }
+          ]
+        },
+        "drift_error": null
+      }
+    },
+    {
+      "case": "L3",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "96d3ef3abc09e659690da6bfea8e62caa9ef1127"
+      },
+      "expected": {
+        "drift": {
+          "aligned": false,
+          "behavioral": [],
+          "ownership": [],
+          "structural": [
+            {
+              "change": "REMOVED",
+              "file": "src/orders.py",
+              "id": "imports:orders->audit",
+              "kind": "imports"
+            }
+          ]
+        },
+        "drift_error": null
+      }
+    },
+    {
+      "case": "L4",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "a36f31280175bc96905f98dc69b820c28ce659e7"
+      },
+      "expected": {
+        "drift": {
+          "aligned": false,
+          "behavioral": [
+            {
+              "change": "ADDED",
+              "file": "src/orders.py",
+              "id": "state:[\"src/orders.py\",\"orders:Order\",\"self.status\",\"shipped\"]",
+              "kind": "state"
+            },
+            {
+              "change": "ADDED",
+              "file": "src/orders.py",
+              "id": "transition:[\"src/orders.py\",\"orders:Order.advance\",\"state:[\\\"src/orders.py\\\",\\\"orders:Order\\\",\\\"self.status\\\",\\\"paid\\\"]\",\"state:[\\\"src/orders.py\\\",\\\"orders:Order\\\",\\\"self.status\\\",\\\"shipped\\\"]\"]",
+              "kind": "transition"
+            }
+          ],
+          "ownership": [],
+          "structural": []
+        },
+        "drift_error": null
+      }
+    },
+    {
+      "case": "L5",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "4cb24a9407deb003fc19605e51ede8ea0f7b072c"
+      },
+      "expected": {
+        "drift": {
+          "aligned": true,
+          "behavioral": [],
+          "ownership": [],
+          "structural": []
+        },
+        "drift_error": null
+      }
+    },
+    {
+      "case": "L6",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "ecd599e93719c3aed79bbf197b66366f2829e869"
+      },
+      "expected": {
+        "drift": {
+          "aligned": false,
+          "behavioral": [],
+          "ownership": [
+            {
+              "author": "visitor@fixture.example",
+              "change": "VIOLATION",
+              "commit": "ecd599e93719c3aed79bbf197b66366f2829e869",
+              "owners": [
+                "owner@fixture.example"
+              ],
+              "path": "src/orders.py"
+            }
+          ],
+          "structural": []
+        },
+        "drift_error": null
+      }
+    },
+    {
+      "case": "L7",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "d288268468df65602e9f4b348a95ff561ddd67bd"
+      },
+      "expected": {
+        "drift": {
+          "aligned": false,
+          "behavioral": [],
+          "ownership": [],
+          "structural": [
+            {
+              "change": "ADDED",
+              "file": "src/store.py",
+              "id": "inherits:store:OrderStore->store:Store",
+              "kind": "inherits"
+            }
+          ]
+        },
+        "drift_error": null
+      }
+    },
+    {
+      "case": "L8",
+      "request": {
+        "repository": "kaan-kanadasi/doc-tracker-model-fixtures",
+        "commit_id": "c8058c2e8a52b5b1e86710e0821b94437fc438e1"
+      },
+      "expected": {
+        "drift": {
+          "aligned": true,
+          "behavioral": [],
+          "ownership": [],
+          "structural": []
+        },
+        "drift_error": null
+      }
+    }
+  ]
+}
