@@ -199,6 +199,6 @@ tester therefore runs 21 tests and skips 12; on Team 15's system it runs 30 and 
 | LIM-05 | Explicit mappings only; unmapped implementation files get no findings; Layer 2 is Python only | REQ-02 |
 | LIM-06 | One test session at a time (409 for up to 720 s) | testing interface |
 | LIM-07 | Public repositories only; 2000 changed files; 1 MB per mapped file; 60 s per git command | REQ-01, REQ-05 |
-| LIM-08 | CI's deployed-suite job targets doc-tracker-5t4s until the DEPLOY_BASE_URL variable is changed | release checks |
+| LIM-08 | Saved results and test sessions are lost when Render replaces the free instance; a second Render service (doc-tracker-5t4s) also runs v0.5.0 but is not the registered URL | REQ-04, release checks |
 
 The local pytest suite assumes Linux paths (`tests/conftest.py`); CI runs it on Ubuntu.
