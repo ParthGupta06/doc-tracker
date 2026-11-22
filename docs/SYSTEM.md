@@ -1,7 +1,7 @@
-# Documentation Tracker: system as delivered (v0.5.0)
+# Documentation Tracker: system as delivered (v0.5.1)
 
 Team 16, Pod 15/16. Deployed at https://doc-tracker-team16.onrender.com (`/system`, `/tester`).
-Release: tag `v0.5.0` (commit 35e875c). Pod specification: [contract 2.5.0](contract/pod-contract.md),
+Release: tag `v0.5.1` (v0.5.0 plus the final contract 2.5.0 rule for T-23). Pod specification: [contract 2.5.0](contract/pod-contract.md),
 [v1.1 SPEC](contract/spec-v1.1.md), [mapping-v1.1](contract/mapping-v1.1.yaml).
 
 ## 1. What the system does
@@ -163,8 +163,8 @@ flowchart TD
   Health -->|no| ErrHealth["error, source communication or system"]
   Health -->|yes| Has{"Target lists the feature?"}
   Has -->|yes| Run2["Send calls, compare with golden or model-golden answers"]
-  Has -->|no| Fallback{"T-21 and target lists model_drift?"}
-  Fallback -->|yes| L2["Model version: /analyze at L2 twice"]
+  Has -->|no| Fallback{"T-21 on a model_drift target,<br/>or T-23 on any target?"}
+  Fallback -->|yes| L2["T-21: /analyze at L2 twice<br/>T-23: L8 must answer 200 SUCCESS"]
   Fallback -->|no| SkipFeat["skip: target does not implement the feature"]
   Run --> Outcome["pass, fail, or error (system / communication)"]
   Run2 --> Outcome
@@ -172,8 +172,9 @@ flowchart TD
   Outcome --> Cover["Components count when the target answered;<br/>criteria count only on pass or fail"]
 ```
 
-T-18 to T-21 need `prose_detector`; T-22 to T-33 need `model_drift`. On our system the
-tester therefore runs 21 tests and skips 12; on Team 15's system it runs 30 and skips 3.
+T-18 to T-21 need `prose_detector`; T-22 and T-24 to T-33 need `model_drift`; T-23 runs on
+every system (on a system without `model_drift`, L8 must answer 200 SUCCESS). On our system
+the tester therefore runs 22 tests and skips 11; on Team 15's system it runs 30 and skips 3.
 
 ## 4. Sessions, storage and observability
 
@@ -193,12 +194,12 @@ tester therefore runs 21 tests and skips 12; on Team 15's system it runs 30 and 
 | ID | Limitation | Affects |
 |---|---|---|
 | LIM-01 | No authorized review workflow (C7); findings stay PENDING_REVIEW | REQ-03, AC-05 |
-| LIM-02 | No `model_drift`: T-22 to T-33 skip on this system, so the pod suite covers 8 of 10 criteria (not AC-05, AC-09) | REQ-03, REQ-06 |
+| LIM-02 | No `model_drift`: T-22 and T-24 to T-33 skip on this system, so the pod suite covers 9 of 10 criteria (not AC-05) | REQ-03 |
 | LIM-03 | Saved results live on the container disk and are lost on redeploy | REQ-04, AC-06 |
 | LIM-04 | Free Render instance sleeps after 15 idle minutes; first request can take about 50 s | all |
 | LIM-05 | Explicit mappings only; unmapped implementation files get no findings; Layer 2 is Python only | REQ-02 |
 | LIM-06 | One test session at a time (409 for up to 720 s) | testing interface |
 | LIM-07 | Public repositories only; 2000 changed files; 1 MB per mapped file; 60 s per git command | REQ-01, REQ-05 |
-| LIM-08 | CI's deployed-suite job targets doc-tracker-5t4s until the DEPLOY_BASE_URL variable is changed | release checks |
+| LIM-08 | Saved results and test sessions are lost when Render replaces the free instance; a second Render service (doc-tracker-5t4s) also runs v0.5.x but is not the registered URL | REQ-04, release checks |
 
 The local pytest suite assumes Linux paths (`tests/conftest.py`); CI runs it on Ubuntu.

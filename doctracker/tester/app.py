@@ -198,7 +198,7 @@ async def run(body: RunBody) -> Any:
                     continue
                 fn = case.fn
                 if case.feature and case.feature not in (features or set()):
-                    if case.fallback and case.fallback[0] in (features or set()):
+                    if case.fallback and (case.fallback[0] is None or case.fallback[0] in (features or set())):
                         fn = case.fallback[1]
                     else:
                         results.append({'test_id': current, 'outcome': 'skip',

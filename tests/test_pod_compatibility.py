@@ -101,9 +101,25 @@ def test_prose_only_target_skips_every_model_test(monkeypatch):
     for i in range(18, 22):
         assert results[f'T-{i}'] == {'test_id': f'T-{i}', 'outcome': 'skip',
                                      'message': 'target does not implement prose_detector'}
-    for i in range(22, 34):
+    for i in [22] + list(range(24, 34)):
         assert results[f'T-{i}'] == {'test_id': f'T-{i}', 'outcome': 'skip',
                                      'message': 'target does not implement model_drift'}
+    assert results['T-23']['outcome'] == 'fail'  # runs on every system (2.5.0); the stub answers {}
+
+
+def test_t23_runs_without_model_drift(monkeypatch):
+    l8 = MODEL_CASES['L8']['request']['commit_id']
+    def handler(req):
+        if req.url.path.endswith('/health'):
+            return httpx.Response(200, json={'status': 'ok', 'tool_version': 'x', 'config_version': 'mapping-v1.1',
+                                            'features': ['prose_detector']})
+        if req.url.path.endswith('/analyze') and commit_of(req) == l8:
+            return httpx.Response(200, json={'status': 'SUCCESS'})
+        return base_reply(req)
+    monkeypatch.setattr(tester, 'TESTS', [t for t in tester.TESTS if t.test_id == 'T-23'])
+    _, report = run_mock(monkeypatch, handler)
+    assert report['results'][0]['outcome'] == 'pass'
+    assert report['coverage']['system']['covered'] == 1  # AC-09
 
 
 def commit_of(req):

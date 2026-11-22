@@ -38,7 +38,7 @@ one-session rule. Team 16's tester needs seven changes:
 - It runs T-24 to T-33 against `model-golden-outputs.json` as each group is published
   (sections 3 and 4).
 - It runs T-22 and T-23, and T-21's model version, against `model-golden-outputs.json`
-  on a system that lists `model_drift` (section 4).
+  on a system that lists `model_drift`, and T-23 on every other system too (section 4).
 - It counts a component only from tests the target answered, and a criterion only
   from tests that ended `pass` or `fail` (section 5).
 - It keeps to section 6's limits: 110 s for system setup, 15 s for the system's
@@ -188,7 +188,7 @@ T-01 to T-23 they are the lists Team 16's tester already uses.
 | T-20 | Code and documentation updated together | c7: `issues: []` | C4 | AC-03 | skip | runs |
 | T-21 | New findings start PENDING_REVIEW | the findings of T-18 and T-19; model version: L2, twice | C4 C5 | AC-04 | runs the model version with `model_drift`, skip otherwise | runs |
 | T-22 | Authorized and unauthorized review decisions | model fixture: L5 and L6 | C7 | AC-05 | runs | skip |
-| T-23 | Read-only analysis, no repository code execution | model fixture: L8 | C2 | AC-09 | runs | skip |
+| T-23 | Read-only analysis, no repository code execution | model fixture: L8 | C2 | AC-09 | runs | runs |
 | T-24 | `/analyze` at L0: `aligned: true`, three empty lists | model fixture | C1 C2 C3 C4 C5 | AC-03 | runs | skip |
 | T-25 | `/analyze` at L1: `aligned: true` | model fixture | C1 C2 C3 C4 C5 | AC-03 | runs | skip |
 | T-26 | `/analyze` at L2: one structural `ADDED` | model fixture | C1 C2 C3 C4 C5 | AC-02 | runs | skip |
@@ -201,8 +201,8 @@ T-01 to T-23 they are the lists Team 16's tester already uses.
 | T-33 | `/generate` at L0: `structural.json`, `behavioral.json` and `scope.json` byte-equal to the committed `/models` | model fixture | C1 C2 C4 | AC-10 | runs | skip |
 
 The "skip" cells in the last two columns are deviations 1 and 2: Team 15's system has no
-`prose_detector`, and Team 16's has no `model_drift`. T-22 and T-23 need `model_drift`,
-and T-21 runs on either feature.
+`prose_detector`, and Team 16's has no `model_drift`. T-22 needs `model_drift`, T-21 runs
+on either feature, and T-23 runs on every system.
 
 Rules for T-21, T-22 and T-23:
 
@@ -217,14 +217,18 @@ Rules for T-21, T-22 and T-23:
   ownership violation (the unauthorized change: a non-owner edits an owned path). Each
   answer is compared as T-24 to T-31 compare. Without `model_drift` it is `skip` with
   the message "target does not implement model_drift".
-- **T-23.** It needs `model_drift`. L8 must equal its expected answer (`aligned: true`,
-  three empty lists, `drift_error: null`), compared as T-24 to T-31 compare. In L8 the
-  owner adds `src/hangs.py` (its top level loops forever), `src/raises.py` (it raises at
+- **T-23.** It runs on every system: `POST /analyze` for L8, sent once. In L8 the owner
+  adds `src/hangs.py` (its top level loops forever), `src/raises.py` (it raises at
   import) and `src/writes.py` (it writes a file beside itself), and updates `/models` in
   the same commit, so the code would hang, fail or write a file if it were imported or
-  run. Without `model_drift` it is `skip` with the message "target does not implement
-  model_drift", until Team 16 publishes a case of their own. T-23 does not check the
-  "no credentials in logs" part of AC-09.
+  run. On a system that lists `model_drift`, L8 must equal its expected answer
+  (`aligned: true`, three empty lists, `drift_error: null`), compared as T-24 to T-31
+  compare. On a system that does not, the answer must be a 200 `AnalysisResult` with
+  `status: SUCCESS`; `drift` and `drift_error` are not compared there, and no file of
+  expected answers is needed. Either way a normal answer inside the 90 s call limit
+  shows the code was not run. When `/health` fails, T-23 is `error` like the other
+  tests that need a feature. T-23 does not check the "no credentials in logs" part of
+  AC-09.
 
 Rules for T-24 to T-33:
 

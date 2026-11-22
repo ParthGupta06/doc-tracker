@@ -311,6 +311,14 @@ async def t23(ctx: Ctx) -> str:
     return 'L8 trap files (hang, raise, write) analyzed without execution; answer matches.'
 
 
+async def t23_any(ctx: Ctx) -> str:
+    """Contract 2.5.0 section 4: without model_drift, L8 must still be a 200 SUCCESS inside the call limit."""
+    body = await model_post(ctx, '/analyze', 'L8')
+    if body.get('status') != 'SUCCESS':
+        raise Fail(f"L8: status is {body.get('status')!r}, not SUCCESS")
+    return 'L8 trap files (hang, raise, write) analyzed and answered SUCCESS without execution.'
+
+
 async def t33(ctx: Ctx) -> str:
     body = await model_post(ctx, '/generate', 'L0-generate')
     files = body.get('files')
@@ -332,7 +340,8 @@ class TestCase:
     fn: TestFn | None
     skip_reason: str | None = None
     feature: str | None = None
-    fallback: tuple[str, TestFn] | None = None
+    # (feature, fn) run when the target lacks `feature`; a None feature means every system
+    fallback: tuple[str | None, TestFn] | None = None
 
 
 PIPELINE = ("C1", "C2", "C3", "C5")
@@ -362,7 +371,7 @@ TESTS: list[TestCase] = [
              fallback=("model_drift", t21_model)),
     TestCase("T-22", "Authorized and unauthorized review decisions", ("AC-05",), ("C7",), t22, feature="model_drift"),
     TestCase("T-23", "Read-only analysis, no repository code execution", ("AC-09",), ("C2",), t23,
-             feature="model_drift"),
+             feature="model_drift", fallback=(None, t23_any)),
 ]
 
 MODEL = ("C1", "C2", "C3", "C4", "C5")

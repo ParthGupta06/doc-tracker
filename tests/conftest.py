@@ -26,6 +26,12 @@ def pytest_sessionstart(session: pytest.Session) -> None:
         subprocess.run(["rm", "-rf", str(bare)], check=True)
     bare.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "clone", "-q", "--bare", str(work), str(bare)], check=True)
+    # Team 15's public model fixture (contract 2.5.0 section 3), mirrored so T-23 runs against L8 offline
+    model = GIT_BASE / "kaan-kanadasi" / "doc-tracker-model-fixtures.git"
+    if not model.exists():
+        model.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "clone", "-q", "--bare",
+                        "https://github.com/kaan-kanadasi/doc-tracker-model-fixtures.git", str(model)], check=True)
 
 
 @pytest.fixture(autouse=True)

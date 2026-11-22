@@ -156,7 +156,7 @@ def test_full_suite_against_in_process_system(monkeypatch: pytest.MonkeyPatch) -
     assert len(ids) == len(set(ids)) == 33
     failed = [r for r in report["results"] if r["outcome"] not in ("pass", "skip")]
     assert failed == []
-    assert report["coverage"]["system"] == {**report["coverage"]["system"], "covered": 8, "total": 10}
+    assert report["coverage"]["system"] == {**report["coverage"]["system"], "covered": 9, "total": 10}
     assert client.post("/tester/test/run", json={"session_id": sid}).status_code == 409
     assert client.get("/tester/test/report", params={"session_id": sid}).json() == report
     assert sid in system_module.sessions
