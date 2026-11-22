@@ -1,0 +1,188 @@
+{
+  "coverage": {
+    "code": {
+      "covered": 214,
+      "total": 576,
+      "basis": "Executable doctracker.system lines in request-scoped coverage.py contexts; each request retains the session captured at entry"
+    },
+    "component": {
+      "basis": "components C1 to C7 exercised by a test the target answered (pod-contract.md section 5)",
+      "covered": 6,
+      "total": 7
+    },
+    "system": {
+      "basis": "criteria AC-01 to AC-10 (pod-contract.md section 5), each counted once, from tests that ended pass or fail, with AC-11 counted as AC-02 (specifications.md section 4.1)",
+      "covered": 9,
+      "total": 10
+    }
+  },
+  "results": [
+    {
+      "test_id": "T-01",
+      "outcome": "pass",
+      "message": "c1-impl-only matches the golden answer"
+    },
+    {
+      "test_id": "T-02",
+      "outcome": "pass",
+      "message": "c2-add-mod-del matches the golden answer"
+    },
+    {
+      "test_id": "T-03",
+      "outcome": "pass",
+      "message": "c3-rename matches the golden answer"
+    },
+    {
+      "test_id": "T-04",
+      "outcome": "pass",
+      "message": "c4-categories matches the golden answer"
+    },
+    {
+      "test_id": "T-05",
+      "outcome": "pass",
+      "message": "c6-binary matches the golden answer"
+    },
+    {
+      "test_id": "T-06",
+      "outcome": "pass",
+      "message": "c0-to-c3-explicit-base matches the golden answer"
+    },
+    {
+      "test_id": "T-07",
+      "outcome": "pass",
+      "message": "c0-initial matches the golden answer"
+    },
+    {
+      "test_id": "T-08",
+      "outcome": "pass",
+      "message": "400 INVALID_REQUEST"
+    },
+    {
+      "test_id": "T-09",
+      "outcome": "pass",
+      "message": "400 INVALID_REQUEST"
+    },
+    {
+      "test_id": "T-10",
+      "outcome": "pass",
+      "message": "400 INVALID_REQUEST"
+    },
+    {
+      "test_id": "T-11",
+      "outcome": "pass",
+      "message": "400 INVALID_REQUEST"
+    },
+    {
+      "test_id": "T-12",
+      "outcome": "pass",
+      "message": "404 REPOSITORY_NOT_FOUND"
+    },
+    {
+      "test_id": "T-13",
+      "outcome": "pass",
+      "message": "404 COMMIT_NOT_FOUND"
+    },
+    {
+      "test_id": "T-14",
+      "outcome": "pass",
+      "message": "GET returns the saved c1 result unchanged"
+    },
+    {
+      "test_id": "T-15",
+      "outcome": "pass",
+      "message": "404 ANALYSIS_NOT_FOUND"
+    },
+    {
+      "test_id": "T-16",
+      "outcome": "pass",
+      "message": "two c2 runs got distinct ids, and both read back unchanged"
+    },
+    {
+      "test_id": "T-17",
+      "outcome": "pass",
+      "message": "five runs each of c4 and c1 give identical compared fields"
+    },
+    {
+      "test_id": "T-18",
+      "outcome": "pass",
+      "message": "c8-missing-doc: issues match the golden answer"
+    },
+    {
+      "test_id": "T-19",
+      "outcome": "pass",
+      "message": "c1-impl-only: issues match the golden answer"
+    },
+    {
+      "test_id": "T-20",
+      "outcome": "pass",
+      "message": "c7-code-and-doc: issues match the golden answer"
+    },
+    {
+      "test_id": "T-21",
+      "outcome": "pass",
+      "message": "all 3 findings start PENDING_REVIEW"
+    },
+    {
+      "test_id": "T-22",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-23",
+      "outcome": "pass",
+      "message": "L8 was analyzed and answered SUCCESS"
+    },
+    {
+      "test_id": "T-24",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-25",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-26",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-27",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-28",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-29",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-30",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-31",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-32",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    },
+    {
+      "test_id": "T-33",
+      "outcome": "skip",
+      "message": "target does not implement model_drift"
+    }
+  ],
+  "session_id": "232f5008-da67-4cc0-94ed-3ce880478fdd",
+  "target_url": "https://doc-tracker-team16.onrender.com/system"
+}
